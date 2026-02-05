@@ -2,7 +2,6 @@
 <gresources>
 	<gresource prefix="/org/gnome/glib/scanner">
 		<file>__init__.py</file>
-		<file>annotationmain.py</file>
 		<file>annotationparser.py</file>
 		<file>cachestore.py</file>
 		<file>ccompiler.py</file>
