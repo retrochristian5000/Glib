@@ -27,7 +27,7 @@ import sys
 import tempfile
 import pickle
 
-import giscanner
+import scanner
 
 from . import utils
 
@@ -36,7 +36,7 @@ _CACHE_VERSION_FILENAME = '.cache-version'
 
 
 def _get_versionhash():
-    toplevel = os.path.dirname(giscanner.__file__)
+    toplevel = os.path.dirname(scanner.__file__)
     sources = glob.glob(os.path.join(toplevel, '*.py'))
     sources.append(sys.argv[0])
     # Using mtimes is a bit (5x) faster than hashing the file contents

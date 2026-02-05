@@ -699,7 +699,7 @@ raise ValueError."""
             return girast.Array(name, girast.TYPE_ANY, ctype=ctype,
                          is_const=is_const, complete_ctype=complete_ctype)
         elif base in ('GHashTable', 'GLib.HashTable', 'GObject.HashTable'):
-            return girast.Map(ast.TYPE_ANY, girast.TYPE_ANY, ctype=ctype, is_const=is_const,
+            return girast.Map(girast.TYPE_ANY, girast.TYPE_ANY, ctype=ctype, is_const=is_const,
                            complete_ctype=complete_ctype)
         return None
 
