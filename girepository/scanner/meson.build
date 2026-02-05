@@ -81,6 +81,14 @@ if cc.get_id() != 'msvc'
   ])
 endif
 
+serpent_lib = static_library('serpent', 'serpent.c',
+  dependencies: [
+    libglib_dep,
+    libgio_dep,
+    python_dep,
+  ]
+)
+
 giscanner_lib = static_library('giscanner',
   sources: [
     'sourcescanner.c',
