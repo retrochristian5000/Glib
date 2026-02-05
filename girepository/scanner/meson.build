@@ -6,9 +6,6 @@ giscanner_version_py = configure_file(
   configuration: giscanner_conf_data,
 )
 
-# Copy to builddir for use with dumper.py when running uninstalled
-gdump = fs.copyfile('../gdump.c', 'gdump.c')
-
 scanner_res = import('gnome').compile_resources('scanner_resources', 'scanner.gresource.xml',
   c_name: 'scanner',
   dependencies: giscanner_version_py

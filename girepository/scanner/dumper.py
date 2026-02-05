@@ -27,6 +27,8 @@ import shlex
 import subprocess
 import tempfile
 
+from dumpprovider import get_gdump
+
 from .gdumpparser import IntrospectionBinary
 from . import pkgconfig, utils
 from .ccompiler import CCompiler
@@ -51,6 +53,7 @@ main(int argc, char **argv)
 {{
   GError *error = NULL;
   const char *introspect_dump_prefix = "--introspect-dump=";
+  char *output;
 
 #if !GLIB_CHECK_VERSION(2,35,0)
   g_type_init ();
@@ -58,13 +61,14 @@ main(int argc, char **argv)
 
   {init_sections}
 
-  if (argc != 2 || !g_str_has_prefix (argv[1], introspect_dump_prefix))
+  if (argc != 2 || !g_str_has_prefix (argv[1], introspect_dump_prefix) || (output = strchr (argv[1], ',')) == NULL)
     {{
       g_printerr ("Usage: %%s --introspect-dump=input,output\\n", argv[0]);
       exit (1);
     }}
 
-  if (!dump_irepository (argv[1] + strlen (introspect_dump_prefix), &error))
+  *(output++) = 0;
+  if (!dump_irepository (argv[1] + strlen (introspect_dump_prefix), output, &error))
     {{
       g_assert (error != NULL);  /* help the static analyser */
       g_printerr ("%%s\\n", error->message);
@@ -107,22 +111,7 @@ class DumpCompiler:
         os.mkdir(os.path.join(tmpdir, ".libs"))
 
         tpl_args = {}
-        if self._uninst_srcdir is not None:
-            gdump_path = os.path.join(
-                self._uninst_srcdir, "girepository", "scanner", "gdump.c"
-            )
-        else:
-            try:
-                gdump_path = GDUMP_PATH
-            except NameError:
-                gdump_path = os.path.join(
-                    os.path.join(DATADIR), "gobject-introspection-1.0", "gdump.c"
-                )
-        if not os.path.isfile(gdump_path):
-            raise SystemExit(f"Couldn't find {gdump_path}")
-        with open(gdump_path, encoding="utf-8") as gdump_file:
-            gdump_contents = gdump_file.read()
-        tpl_args["gdump_include"] = gdump_contents
+        tpl_args["gdump_include"] = get_gdump().decode("utf-8")
         tpl_args["init_sections"] = "\n".join(self._options.init_sections)
 
         c_path = self._generate_tempfile(tmpdir, ".c")

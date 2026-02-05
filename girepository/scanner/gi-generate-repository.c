@@ -30,6 +30,50 @@
 #include "serpent.h"
 #include "scanner_resources.h"
 
+static PyObject *
+dumpprovider_get_gdump (G_GNUC_UNUSED PyObject *self, G_GNUC_UNUSED PyObject *args)
+{
+	GError *error = NULL;
+	GBytes *dump_data;
+	gsize data_len;
+	const gchar *data;
+	PyObject *ret;
+
+	dump_data = g_resources_lookup_data ("/org/gnome/glib/repository/gdump.c", G_RESOURCE_LOOKUP_FLAGS_NONE, &error);
+	if (!dump_data)
+		{
+			PyErr_SetString (PyExc_IOError, error->message);
+			g_error_free (error);
+			return NULL;
+		}
+
+	data = g_bytes_get_data (dump_data, &data_len);
+	ret = PyBytes_FromStringAndSize (data, data_len);
+	g_bytes_unref (dump_data);
+	return ret;
+}
+
+static PyMethodDef
+dumpprovider_methods[] = {
+	{ "get_gdump", dumpprovider_get_gdump, METH_NOARGS, "Gets the dumper code" },
+	{ NULL, NULL, 0, NULL}
+};
+
+static PyModuleDef
+dumpprovider_module = {
+	PyModuleDef_HEAD_INIT,
+	"dumpprovider",
+	NULL,
+	-1,
+	dumpprovider_methods
+};
+
+static PyObject *
+PyInit_dumpprovider (void)
+{
+	return PyModule_Create (&dumpprovider_module);
+}
+
 extern PyMODINIT_FUNC PyInit__giscanner (void);
 
 static gboolean
