@@ -248,7 +248,17 @@ pkg.generate(libgirepository,
 )
 
 subdir('compiler')
-subdir('scanner')
+
+python_dep = python.dependency(embed: true, required: get_option('ir_generator'))
+# The python dependency from pymod is very buggy in cross-builds (mesonbuild#12540)
+if python_dep.found() and not cc.has_header('Python.h', dependencies: python_dep)
+  python_dep = dependency('', required: false)
+endif
+flex = find_program('flex', 'win_flex', required: get_option('ir_generator'))
+bison = find_program('bison', 'win_bison', required: get_option('ir_generator'))
+if python_dep.found() and flex.found() and bison.found()
+  subdir('scanner')
+endif
 
 if enable_gir
   subdir('introspection')

@@ -11,9 +11,6 @@ scanner_res = import('gnome').compile_resources('scanner_resources', 'scanner.gr
   dependencies: giscanner_version_py
 )
 
-flex = find_program('flex', 'win_flex')
-bison = find_program('bison', 'win_bison')
-
 scannerparser = custom_target('scannerparser',
     input: 'scannerparser.y',
    output: ['scannerparser.c', 'scannerparser.h'],
@@ -43,8 +40,6 @@ if cc.get_id() != 'msvc'
     '-Wno-misleading-indentation',
   ])
 endif
-
-python_dep = python.dependency(embed: true)
 
 serpent_lib = static_library('serpent', 'serpent.c',
   dependencies: [
