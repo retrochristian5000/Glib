@@ -29,7 +29,7 @@ from .utils import have_debug_flag, dll_dirs
 
 dlldirs = dll_dirs()
 dlldirs.add_dll_dirs(["gio-2.0"])
-from ._giscanner import SourceScanner as CSourceScanner
+from _giscanner import SourceScanner as CSourceScanner
 dlldirs.cleanup_dll_dirs()
 
 HEADER_EXTS = [".h", ".hpp", ".hxx"]

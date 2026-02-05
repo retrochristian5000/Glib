@@ -21,14 +21,12 @@
  *
  */
 
-#ifdef HAVE_CONFIG_H
-#  include "config.h"
-#endif
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include "sourcescanner.h"
 
 #include <glib-object.h>
+#include <gi-visibility.h>
 
 #if PY_MAJOR_VERSION >= 3
     #define MOD_INIT(name) PyMODINIT_FUNC PyInit_##name(void)
@@ -609,7 +607,7 @@ static struct PyModuleDef moduledef = {
 MOD_INIT(_giscanner)
 {
     PyObject *m, *d;
-    const char *module_name = "scanner._giscanner";
+    const char *module_name = "_giscanner";
 
 #if PY_MAJOR_VERSION >= 3
     moduledef.m_name = module_name;

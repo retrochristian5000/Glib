@@ -226,7 +226,6 @@ class Transformer:
         for path in utils.get_system_data_dirs():
             searchdirs.append(os.path.join(path, "gir-1.0"))
         searchdirs.append(GIR_DIR)
-        searchdirs.append(os.path.join(DATADIR, "gir-1.0"))
         if os.name != "nt":
             # For backwards compatibility, was always unconditionally added to the list.
             searchdirs.append("/usr/share/gir-1.0")
