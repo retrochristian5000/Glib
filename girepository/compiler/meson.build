@@ -33,3 +33,4 @@ if enable_gir
   # just built.
   meson.override_find_program('g-ir-compiler', gicompilerepository)
 endif
+meson.override_find_program('gi-compile-repository', gicompilerepository)
