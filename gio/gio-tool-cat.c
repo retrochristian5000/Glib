@@ -27,6 +27,7 @@
 
 #ifdef G_OS_WIN32
 #include <io.h>
+#include <windows.h>
 #endif
 
 #ifndef STDOUT_FILENO
@@ -81,8 +82,45 @@ cat (GFile *file)
             {
               int errsv;
 
-              written = write (STDOUT_FILENO, p, res);
-              errsv = errno;
+#if defined(G_OS_WIN32)
+              HANDLE h = (HANDLE) _get_osfhandle (STDOUT_FILENO);
+              DWORD mode;
+
+              if (h != INVALID_HANDLE_VALUE && GetConsoleMode (h, &mode))
+                {
+                  GError *conv_error = NULL;
+                  gunichar2 *utf16_buf;
+                  gsize items_read, items_written;
+
+                  utf16_buf = (gunichar2 *) g_convert (p, res, "UTF-16LE", "UTF-8",
+                                                       &items_read, &items_written, &conv_error);
+                  if (conv_error)
+                    {
+                      print_file_error (file, conv_error->message);
+                      g_error_free (conv_error);
+                      success = FALSE;
+                      goto out;
+                    }
+
+                  DWORD chars_written_console;
+                  if (WriteConsoleW (h, utf16_buf, items_written / sizeof (gunichar2), &chars_written_console, NULL))
+                    {
+                      written = items_read;
+                      errsv = 0;
+                    }
+                  else
+                    {
+                      written = -1;
+                      errsv = EIO;
+                    }
+                  g_free (utf16_buf);
+                }
+              else
+#endif
+                {
+                  written = write (STDOUT_FILENO, p, res);
+                  errsv = errno;
+                }
 
               if (written == -1 && errsv != EINTR)
                 {
