@@ -25,12 +25,9 @@ import tempfile
 
 from .message import Position
 from .ccompiler import CCompiler
-from .utils import have_debug_flag, dll_dirs
+from .utils import have_debug_flag
 
-dlldirs = dll_dirs()
-dlldirs.add_dll_dirs(["gio-2.0"])
 from _giscanner import SourceScanner as CSourceScanner
-dlldirs.cleanup_dll_dirs()
 
 HEADER_EXTS = [".h", ".hpp", ".hxx"]
 SOURCE_EXTS = [".c", ".cpp", ".cc", ".cxx"]
