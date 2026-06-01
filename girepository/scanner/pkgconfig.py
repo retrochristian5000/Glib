@@ -1,4 +1,7 @@
 # GObject-Introspection - a framework for introspecting GObject libraries
+# Copyright (c) 2018  Tomasz Miąsko <tomasz.miasko@gmail.com>
+#
+# SPDX-License-Identifier: LGPL-2.1-or-later
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public

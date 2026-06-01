@@ -5,6 +5,8 @@
 # Copyright (C) 2008-2010 Johan Dahlin
 # Copyright (C) 2012-2013 Dieter Verfaillie <dieterv@optionexplicit.be>
 #
+# SPDX-License-Identifier: GPL-2.0-or-later
+#
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
 # as published by the Free Software Foundation; either version 2
