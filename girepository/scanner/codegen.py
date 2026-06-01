@@ -27,14 +27,17 @@ from . import girast
 
 
 class CCodeGenerator(object):
-    def __init__(self, namespace,
-                 out_h_filename,
-                 out_c_filename,
-                 function_decoration=[],
-                 include_first_header=[],
-                 include_last_header=[],
-                 include_first_src=[],
-                 include_last_src=[]):
+    def __init__(
+        self,
+        namespace,
+        out_h_filename,
+        out_c_filename,
+        function_decoration=[],
+        include_first_header=[],
+        include_last_header=[],
+        include_first_src=[],
+        include_last_src=[],
+    ):
         self.out_h_filename = out_h_filename
         self.out_c_filename = out_c_filename
         self.function_decoration = function_decoration
@@ -46,39 +49,49 @@ class CCodeGenerator(object):
         self.namespace = namespace
 
     def gen_symbol(self, name):
-        name = name.replace(' ', '_')
-        return '%s_%s' % (self.namespace.symbol_prefixes[0], name)
+        name = name.replace(" ", "_")
+        return "%s_%s" % (self.namespace.symbol_prefixes[0], name)
 
     def _typecontainer_to_ctype(self, param):
-        if (isinstance(param, girast.Parameter)
-        and param.direction in (girast.PARAM_DIRECTION_OUT, girast.PARAM_DIRECTION_INOUT)):
-            suffix = '*'
+        if isinstance(param, girast.Parameter) and param.direction in (
+            girast.PARAM_DIRECTION_OUT,
+            girast.PARAM_DIRECTION_INOUT,
+        ):
+            suffix = "*"
         else:
-            suffix = ''
+            suffix = ""
 
-        if (param.type.is_equiv((girast.TYPE_STRING, girast.TYPE_FILENAME))
-        and param.transfer == girast.PARAM_TRANSFER_NONE):
+        if (
+            param.type.is_equiv((girast.TYPE_STRING, girast.TYPE_FILENAME))
+            and param.transfer == girast.PARAM_TRANSFER_NONE
+        ):
             return "const gchar*" + suffix
 
         return param.type.ctype + suffix
 
     def _write_prelude(self, out, func):
         if self.function_decoration:
-            out.write("""
-%s""" % " ".join(self.function_decoration))
+            out.write(
+                """
+%s"""
+                % " ".join(self.function_decoration)
+            )
 
-        out.write("""
+        out.write(
+            """
 %s
-%s (""" % (self._typecontainer_to_ctype(func.retval), func.symbol))
-        l = len(func.parameters)
+%s ("""
+            % (self._typecontainer_to_ctype(func.retval), func.symbol)
+        )
+        n_params = len(func.parameters)
         if func.parameters:
             for i, param in enumerate(func.parameters):
                 ctype = self._typecontainer_to_ctype(param)
-                out.write('%s %s' % (ctype, param.argname))
-                if i < l - 1:
+                out.write("%s %s" % (ctype, param.argname))
+                if i < n_params - 1:
                     out.write(", ")
         else:
-            out.write('void')
+            out.write("void")
         out.write(")")
 
     def _write_prototype(self, func):
@@ -86,31 +99,31 @@ class CCodeGenerator(object):
         self.out_h.write(";\n\n")
 
     def _write_annotation_transfer(self, node):
-        if (node.type not in girast.BASIC_TYPES or
-                node.type.ctype.endswith('*')):
-            self.out_c.write(" (transfer %s)" % (node.transfer, ))
+        if node.type not in girast.BASIC_TYPES or node.type.ctype.endswith("*"):
+            self.out_c.write(" (transfer %s)" % (node.transfer,))
 
     def _write_docs(self, func):
-        self.out_c.write("/**\n * %s:\n" % (func.symbol, ))
+        self.out_c.write("/**\n * %s:\n" % (func.symbol,))
         for param in func.parameters:
-            self.out_c.write(" * @%s" % (param.argname, ))
-            if param.direction in (girast.PARAM_DIRECTION_OUT,
-                                   girast.PARAM_DIRECTION_INOUT):
+            self.out_c.write(" * @%s" % (param.argname,))
+            if param.direction in (
+                girast.PARAM_DIRECTION_OUT,
+                girast.PARAM_DIRECTION_INOUT,
+            ):
                 if param.caller_allocates:
-                    allocate_string = ' caller-allocates'
+                    allocate_string = " caller-allocates"
                 else:
-                    allocate_string = ''
-                self.out_c.write(": (%s%s) " % (param.direction,
-                                                allocate_string))
+                    allocate_string = ""
+                self.out_c.write(": (%s%s) " % (param.direction, allocate_string))
                 self._write_annotation_transfer(param)
             self.out_c.write(":\n")
-        self.out_c.write(' *\n')
-        self.out_c.write(' * Undocumented.')
+        self.out_c.write(" *\n")
+        self.out_c.write(" * Undocumented.")
         if func.retval.type != girast.TYPE_NONE:
-            self.out_c.write('\n *\n')
-            self.out_c.write(' * Returns: ')
+            self.out_c.write("\n *\n")
+            self.out_c.write(" * Returns: ")
             self._write_annotation_transfer(func.retval)
-        self.out_c.write('\n */')
+        self.out_c.write("\n */")
 
     @contextmanager
     def _function(self, func):
@@ -122,20 +135,23 @@ class CCodeGenerator(object):
         self.out_c.write("}\n\n")
 
     def _codegen_start(self):
-        warning = '/* GENERATED BY testcodegen.py; DO NOT EDIT */\n\n'
+        warning = "/* GENERATED BY testcodegen.py; DO NOT EDIT */\n\n"
         self.out_h.write(warning)
         nsupper = self.namespace.name.upper()
 
         for header in self.include_first_header:
             self.out_h.write("""#include "%s"\n""" % header)
 
-        self.out_h.write("""
+        self.out_h.write(
+            """
 #ifndef __%s_H__
 #define __%s_H__
 
 #include <glib-object.h>
 
-""" % (nsupper, nsupper))
+"""
+            % (nsupper, nsupper)
+        )
 
         for header in self.include_last_header:
             self.out_h.write("""#include "%s"\n""" % header)
@@ -147,7 +163,7 @@ class CCodeGenerator(object):
 
         src_dir = os.path.dirname(os.path.realpath(self.out_c.name))
         header = os.path.relpath(self.out_h_filename, src_dir)
-        self.out_c.write("""#include "%s"\n\n""" % (header, ))
+        self.out_c.write("""#include "%s"\n\n""" % (header,))
 
         for header in self.include_last_src:
             self.out_c.write("""#include "%s"\n""" % header)
@@ -163,8 +179,8 @@ class CCodeGenerator(object):
         self._function_bodies[node] = body
 
     def codegen(self):
-        self.out_h = open(self.out_h_filename, 'w', encoding='utf-8')
-        self.out_c = open(self.out_c_filename, 'w', encoding='utf-8')
+        self.out_h = open(self.out_h_filename, "w", encoding="utf-8")
+        self.out_c = open(self.out_c_filename, "w", encoding="utf-8")
 
         self._codegen_start()
 
@@ -173,7 +189,7 @@ class CCodeGenerator(object):
                 with self._function(node):
                     body = self._function_bodies.get(node)
                     if not body:
-                        body = ''
+                        body = ""
                     self.out_c.write(body)
 
         self._codegen_end()

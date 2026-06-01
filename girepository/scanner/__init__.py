@@ -20,10 +20,11 @@
 # Boston, MA 02111-1307, USA.
 #
 import os
-builddir = os.environ.get('UNINSTALLED_INTROSPECTION_BUILDDIR')
+
+builddir = os.environ.get("UNINSTALLED_INTROSPECTION_BUILDDIR")
 if builddir is not None:
-    __path__.append(os.path.join(builddir, 'girepository', 'scanner'))  # type: ignore  # mypy issue #1422
+    __path__.append(os.path.join(builddir, "girepository", "scanner"))  # type: ignore  # mypy issue #1422
 try:
     from ._version import __version__
 except ImportError:
-    __version__ = '0.0.0'
+    __version__ = "0.0.0"

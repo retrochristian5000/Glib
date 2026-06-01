@@ -42,16 +42,18 @@ class Type(object):
     from a C type string, or a gtype_name (from g_type_name()).
     """
 
-    def __init__(self,
-                 ctype=None,
-                 gtype_name=None,
-                 target_fundamental=None,
-                 target_giname=None,
-                 target_foreign=None,
-                 _target_unknown=False,
-                 is_const=False,
-                 origin_symbol=None,
-                 complete_ctype=None):
+    def __init__(
+        self,
+        ctype=None,
+        gtype_name=None,
+        target_fundamental=None,
+        target_giname=None,
+        target_foreign=None,
+        _target_unknown=False,
+        is_const=False,
+        origin_symbol=None,
+        complete_ctype=None,
+    ):
         self.ctype = ctype
         self.gtype_name = gtype_name
         self.origin_symbol = origin_symbol
@@ -61,7 +63,7 @@ class Type(object):
             assert target_giname is None
             assert target_foreign is None
         elif target_giname:
-            assert '.' in target_giname
+            assert "." in target_giname
             assert target_fundamental is None
             assert target_foreign is None
         elif target_foreign:
@@ -78,9 +80,7 @@ class Type(object):
 
     @property
     def resolved(self):
-        return (self.target_fundamental or
-                self.target_giname or
-                self.target_foreign)
+        return self.target_fundamental or self.target_giname or self.target_foreign
 
     @property
     def unresolved_string(self):
@@ -96,31 +96,33 @@ class Type(object):
     @classmethod
     def create_from_gtype_name(cls, gtype_name):
         """Parse a GType name (as from g_type_name()), and return a
-Type instance.  Note that this function performs namespace lookup,
-in contrast to the other create_type() functions."""
+        Type instance.  Note that this function performs namespace lookup,
+        in contrast to the other create_type() functions."""
         # First, is it a fundamental?
         fundamental = type_names.get(gtype_name)
         if fundamental is not None:
-            return cls(target_fundamental=fundamental.target_fundamental,
-                       ctype=fundamental.ctype)
-        if gtype_name == 'GHashTable':
+            return cls(
+                target_fundamental=fundamental.target_fundamental,
+                ctype=fundamental.ctype,
+            )
+        if gtype_name == "GHashTable":
             return Map(TYPE_ANY, TYPE_ANY, gtype_name=gtype_name)
-        elif gtype_name == 'GByteArray':
-            return Array('GLib.ByteArray', TYPE_UINT8, gtype_name=gtype_name)
-        elif gtype_name in ('GArray', 'GPtrArray'):
-            return Array('GLib.' + gtype_name[1:], TYPE_ANY,
-                         gtype_name=gtype_name)
-        elif gtype_name == 'GStrv':
+        elif gtype_name == "GByteArray":
+            return Array("GLib.ByteArray", TYPE_UINT8, gtype_name=gtype_name)
+        elif gtype_name in ("GArray", "GPtrArray"):
+            return Array("GLib." + gtype_name[1:], TYPE_ANY, gtype_name=gtype_name)
+        elif gtype_name == "GStrv":
             bare_utf8 = TYPE_STRING.clone()
             bare_utf8.ctype = None
-            return Array(None, bare_utf8, ctype=None, gtype_name=gtype_name,
-                         is_const=False)
+            return Array(
+                None, bare_utf8, ctype=None, gtype_name=gtype_name, is_const=False
+            )
 
         return cls(gtype_name=gtype_name)
 
     def get_giname(self):
         assert self.target_giname is not None
-        return self.target_giname.split('.')[1]
+        return self.target_giname.split(".")[1]
 
     def _compare(self, other, op):
         if self.target_fundamental:
@@ -151,8 +153,14 @@ in contrast to the other create_type() functions."""
         return self._compare(other, operator.ne)
 
     def __hash__(self):
-        return hash((self.target_fundamental, self.target_giname,
-                     self.target_foreign, self.ctype))
+        return hash(
+            (
+                self.target_fundamental,
+                self.target_giname,
+                self.target_foreign,
+                self.ctype,
+            )
+        )
 
     def is_equiv(self, typeval):
         """Return True if the specified types are compatible at
@@ -168,11 +176,13 @@ in contrast to the other create_type() functions."""
         return self == typeval
 
     def clone(self):
-        return Type(target_fundamental=self.target_fundamental,
-                    target_giname=self.target_giname,
-                    target_foreign=self.target_foreign,
-                    ctype=self.ctype,
-                    is_const=self.is_const)
+        return Type(
+            target_fundamental=self.target_fundamental,
+            target_giname=self.target_giname,
+            target_foreign=self.target_foreign,
+            ctype=self.ctype,
+            is_const=self.is_const,
+        )
 
     def __str__(self):
         if self.target_fundamental:
@@ -181,18 +191,18 @@ in contrast to the other create_type() functions."""
             return self.target_giname
         elif self.target_foreign:
             return self.target_foreign
-        return '<undefined>'
+        return "<undefined>"
 
     def __repr__(self):
         if self.target_fundamental:
-            data = 'target_fundamental=%s, ' % (self.target_fundamental, )
+            data = "target_fundamental=%s, " % (self.target_fundamental,)
         elif self.target_giname:
-            data = 'target_giname=%s, ' % (self.target_giname, )
+            data = "target_giname=%s, " % (self.target_giname,)
         elif self.target_foreign:
-            data = 'target_foreign=%s, ' % (self.target_foreign, )
+            data = "target_foreign=%s, " % (self.target_foreign,)
         else:
-            data = ''
-        return '%s(%sctype=%s)' % (self.__class__.__name__, data, self.ctype)
+            data = ""
+        return "%s(%sctype=%s)" % (self.__class__.__name__, data, self.ctype)
 
 
 class TypeUnknown(Type):
@@ -201,55 +211,55 @@ class TypeUnknown(Type):
 
 
 # Fundamental types, two special ones
-TYPE_NONE = Type(target_fundamental='none', ctype='void')
-TYPE_ANY = Type(target_fundamental='gpointer', ctype='gpointer')
+TYPE_NONE = Type(target_fundamental="none", ctype="void")
+TYPE_ANY = Type(target_fundamental="gpointer", ctype="gpointer")
 # Fundamental types, "Basic" types
-TYPE_BOOLEAN = Type(target_fundamental='gboolean', ctype='gboolean')
-TYPE_INT8 = Type(target_fundamental='gint8', ctype='gint8')
-TYPE_UINT8 = Type(target_fundamental='guint8', ctype='guint8')
-TYPE_INT16 = Type(target_fundamental='gint16', ctype='gint16')
-TYPE_UINT16 = Type(target_fundamental='guint16', ctype='guint16')
-TYPE_INT32 = Type(target_fundamental='gint32', ctype='gint32')
-TYPE_UINT32 = Type(target_fundamental='guint32', ctype='guint32')
-TYPE_INT64 = Type(target_fundamental='gint64', ctype='gint64')
-TYPE_UINT64 = Type(target_fundamental='guint64', ctype='guint64')
-TYPE_CHAR = Type(target_fundamental='gchar', ctype='gchar')
-TYPE_SHORT = Type(target_fundamental='gshort', ctype='gshort')
-TYPE_USHORT = Type(target_fundamental='gushort', ctype='gushort')
-TYPE_INT = Type(target_fundamental='gint', ctype='gint')
-TYPE_UINT = Type(target_fundamental='guint', ctype='guint')
-TYPE_LONG = Type(target_fundamental='glong', ctype='glong')
-TYPE_ULONG = Type(target_fundamental='gulong', ctype='gulong')
-TYPE_SIZE = Type(target_fundamental='gsize', ctype='gsize')
-TYPE_SSIZE = Type(target_fundamental='gssize', ctype='gssize')
-TYPE_INTPTR = Type(target_fundamental='gintptr', ctype='gintptr')
-TYPE_UINTPTR = Type(target_fundamental='guintptr', ctype='guintptr')
+TYPE_BOOLEAN = Type(target_fundamental="gboolean", ctype="gboolean")
+TYPE_INT8 = Type(target_fundamental="gint8", ctype="gint8")
+TYPE_UINT8 = Type(target_fundamental="guint8", ctype="guint8")
+TYPE_INT16 = Type(target_fundamental="gint16", ctype="gint16")
+TYPE_UINT16 = Type(target_fundamental="guint16", ctype="guint16")
+TYPE_INT32 = Type(target_fundamental="gint32", ctype="gint32")
+TYPE_UINT32 = Type(target_fundamental="guint32", ctype="guint32")
+TYPE_INT64 = Type(target_fundamental="gint64", ctype="gint64")
+TYPE_UINT64 = Type(target_fundamental="guint64", ctype="guint64")
+TYPE_CHAR = Type(target_fundamental="gchar", ctype="gchar")
+TYPE_SHORT = Type(target_fundamental="gshort", ctype="gshort")
+TYPE_USHORT = Type(target_fundamental="gushort", ctype="gushort")
+TYPE_INT = Type(target_fundamental="gint", ctype="gint")
+TYPE_UINT = Type(target_fundamental="guint", ctype="guint")
+TYPE_LONG = Type(target_fundamental="glong", ctype="glong")
+TYPE_ULONG = Type(target_fundamental="gulong", ctype="gulong")
+TYPE_SIZE = Type(target_fundamental="gsize", ctype="gsize")
+TYPE_SSIZE = Type(target_fundamental="gssize", ctype="gssize")
+TYPE_INTPTR = Type(target_fundamental="gintptr", ctype="gintptr")
+TYPE_UINTPTR = Type(target_fundamental="guintptr", ctype="guintptr")
 # C99 types
-TYPE_LONG_LONG = Type(target_fundamental='long long', ctype='long long')
-TYPE_LONG_ULONG = Type(target_fundamental='unsigned long long',
-                       ctype='unsigned long long')
-TYPE_FLOAT = Type(target_fundamental='gfloat', ctype='gfloat')
-TYPE_DOUBLE = Type(target_fundamental='gdouble', ctype='gdouble')
+TYPE_LONG_LONG = Type(target_fundamental="long long", ctype="long long")
+TYPE_LONG_ULONG = Type(
+    target_fundamental="unsigned long long", ctype="unsigned long long"
+)
+TYPE_FLOAT = Type(target_fundamental="gfloat", ctype="gfloat")
+TYPE_DOUBLE = Type(target_fundamental="gdouble", ctype="gdouble")
 # ?
-TYPE_LONG_DOUBLE = Type(target_fundamental='long double',
-                        ctype='long double')
-TYPE_UNICHAR = Type(target_fundamental='gunichar', ctype='gunichar')
+TYPE_LONG_DOUBLE = Type(target_fundamental="long double", ctype="long double")
+TYPE_UNICHAR = Type(target_fundamental="gunichar", ctype="gunichar")
 # Platform-specific types
-TYPE_TIME_T = Type(target_fundamental='time_t', ctype='time_t')
-TYPE_OFF_T = Type(target_fundamental='off_t', ctype='off_t')
+TYPE_TIME_T = Type(target_fundamental="time_t", ctype="time_t")
+TYPE_OFF_T = Type(target_fundamental="off_t", ctype="off_t")
 # Unix-specific types that are handled here for historical reasons
-TYPE_DEV_T = Type(target_fundamental='dev_t', ctype='dev_t')
-TYPE_GID_T = Type(target_fundamental='gid_t', ctype='gid_t')
-TYPE_PID_T = Type(target_fundamental='pid_t', ctype='pid_t')
-TYPE_SOCKLEN_T = Type(target_fundamental='socklen_t', ctype='socklen_t')
-TYPE_UID_T = Type(target_fundamental='uid_t', ctype='uid_t')
+TYPE_DEV_T = Type(target_fundamental="dev_t", ctype="dev_t")
+TYPE_GID_T = Type(target_fundamental="gid_t", ctype="gid_t")
+TYPE_PID_T = Type(target_fundamental="pid_t", ctype="pid_t")
+TYPE_SOCKLEN_T = Type(target_fundamental="socklen_t", ctype="socklen_t")
+TYPE_UID_T = Type(target_fundamental="uid_t", ctype="uid_t")
 
 # C types with semantics overlaid
-TYPE_GTYPE = Type(target_fundamental='GType', ctype='GType')
-TYPE_STRING = Type(target_fundamental='utf8', ctype='gchar*')
-TYPE_FILENAME = Type(target_fundamental='filename', ctype='gchar*')
+TYPE_GTYPE = Type(target_fundamental="GType", ctype="GType")
+TYPE_STRING = Type(target_fundamental="utf8", ctype="gchar*")
+TYPE_FILENAME = Type(target_fundamental="filename", ctype="gchar*")
 
-TYPE_VALIST = Type(target_fundamental='va_list', ctype='va_list')
+TYPE_VALIST = Type(target_fundamental="va_list", ctype="va_list")
 
 BASIC_TYPES = [
     TYPE_BOOLEAN,
@@ -321,62 +331,62 @@ for typeval in BASIC_GIR_TYPES:
     basic_type_names[typeval.target_fundamental] = typeval
 
 # C builtin
-type_names['char'] = TYPE_CHAR
-type_names['signed char'] = TYPE_INT8
-type_names['unsigned char'] = TYPE_UINT8
-type_names['short'] = TYPE_SHORT
-type_names['signed short'] = TYPE_SHORT
-type_names['unsigned short'] = TYPE_USHORT
-type_names['int'] = TYPE_INT
-type_names['signed int'] = TYPE_INT
-type_names['unsigned short int'] = TYPE_USHORT
-type_names['signed'] = TYPE_INT
-type_names['unsigned int'] = TYPE_UINT
-type_names['unsigned'] = TYPE_UINT
-type_names['long'] = TYPE_LONG
-type_names['signed long'] = TYPE_LONG
-type_names['unsigned long'] = TYPE_ULONG
-type_names['unsigned long int'] = TYPE_ULONG
-type_names['float'] = TYPE_FLOAT
-type_names['double'] = TYPE_DOUBLE
-type_names['char*'] = TYPE_STRING
-type_names['void*'] = TYPE_ANY
-type_names['void'] = TYPE_NONE
+type_names["char"] = TYPE_CHAR
+type_names["signed char"] = TYPE_INT8
+type_names["unsigned char"] = TYPE_UINT8
+type_names["short"] = TYPE_SHORT
+type_names["signed short"] = TYPE_SHORT
+type_names["unsigned short"] = TYPE_USHORT
+type_names["int"] = TYPE_INT
+type_names["signed int"] = TYPE_INT
+type_names["unsigned short int"] = TYPE_USHORT
+type_names["signed"] = TYPE_INT
+type_names["unsigned int"] = TYPE_UINT
+type_names["unsigned"] = TYPE_UINT
+type_names["long"] = TYPE_LONG
+type_names["signed long"] = TYPE_LONG
+type_names["unsigned long"] = TYPE_ULONG
+type_names["unsigned long int"] = TYPE_ULONG
+type_names["float"] = TYPE_FLOAT
+type_names["double"] = TYPE_DOUBLE
+type_names["char*"] = TYPE_STRING
+type_names["void*"] = TYPE_ANY
+type_names["void"] = TYPE_NONE
 # Also alias the signed one here
-type_names['signed long long'] = TYPE_LONG_LONG
+type_names["signed long long"] = TYPE_LONG_LONG
 # C99 stdint exact width types
-type_names['int8_t'] = TYPE_INT8
-type_names['uint8_t'] = TYPE_UINT8
-type_names['int16_t'] = TYPE_INT16
-type_names['uint16_t'] = TYPE_UINT16
-type_names['int32_t'] = TYPE_INT32
-type_names['uint32_t'] = TYPE_UINT32
-type_names['int64_t'] = TYPE_INT64
-type_names['uint64_t'] = TYPE_UINT64
+type_names["int8_t"] = TYPE_INT8
+type_names["uint8_t"] = TYPE_UINT8
+type_names["int16_t"] = TYPE_INT16
+type_names["uint16_t"] = TYPE_UINT16
+type_names["int32_t"] = TYPE_INT32
+type_names["uint32_t"] = TYPE_UINT32
+type_names["int64_t"] = TYPE_INT64
+type_names["uint64_t"] = TYPE_UINT64
 
 # A few additional GLib type aliases
-type_names['guchar'] = TYPE_UINT8
-type_names['gchararray'] = TYPE_STRING
-type_names['gchar*'] = TYPE_STRING
-type_names['goffset'] = TYPE_INT64
-type_names['gunichar2'] = TYPE_UINT16
-type_names['gsize'] = TYPE_SIZE
-type_names['gssize'] = TYPE_SSIZE
-type_names['gintptr'] = TYPE_INTPTR
-type_names['guintptr'] = TYPE_UINTPTR
-type_names['gconstpointer'] = TYPE_ANY
-type_names['grefcount'] = TYPE_INT
-type_names['gatomicrefcount'] = TYPE_INT
+type_names["guchar"] = TYPE_UINT8
+type_names["gchararray"] = TYPE_STRING
+type_names["gchar*"] = TYPE_STRING
+type_names["goffset"] = TYPE_INT64
+type_names["gunichar2"] = TYPE_UINT16
+type_names["gsize"] = TYPE_SIZE
+type_names["gssize"] = TYPE_SSIZE
+type_names["gintptr"] = TYPE_INTPTR
+type_names["guintptr"] = TYPE_UINTPTR
+type_names["gconstpointer"] = TYPE_ANY
+type_names["grefcount"] = TYPE_INT
+type_names["gatomicrefcount"] = TYPE_INT
 
 # We used to support these; continue to do so
-type_names['any'] = TYPE_ANY
-type_names['boolean'] = TYPE_BOOLEAN
-type_names['uint'] = TYPE_UINT
-type_names['ulong'] = TYPE_ULONG
+type_names["any"] = TYPE_ANY
+type_names["boolean"] = TYPE_BOOLEAN
+type_names["uint"] = TYPE_UINT
+type_names["ulong"] = TYPE_ULONG
 
 # C stdio, used in GLib public headers; squash this for now here
 # until we move scanning into GLib and can (skip)
-type_names['FILE*'] = TYPE_ANY
+type_names["FILE*"] = TYPE_ANY
 
 # One off C unix type definitions; note some of these may be GNU Libc
 # specific.  If someone is actually bitten by this, feel free to do
@@ -389,39 +399,39 @@ type_names['FILE*'] = TYPE_ANY
 # methods are added under #ifdefs inside GLib itself.  We could just (skip)
 # the relevant methods, but on the other hand, since these types are just
 # integers it's easy enough to expand them.
-type_names['size_t'] = type_names['gsize']
-type_names['ssize_t'] = type_names['gssize']
-type_names['uintptr_t'] = type_names['guintptr']
-type_names['intptr_t'] = type_names['gintptr']
-type_names['time_t'] = TYPE_TIME_T
-type_names['off_t'] = TYPE_OFF_T
-type_names['pid_t'] = TYPE_PID_T
-type_names['uid_t'] = TYPE_UID_T
-type_names['gid_t'] = TYPE_GID_T
-type_names['dev_t'] = TYPE_DEV_T
-type_names['socklen_t'] = TYPE_SOCKLEN_T
+type_names["size_t"] = type_names["gsize"]
+type_names["ssize_t"] = type_names["gssize"]
+type_names["uintptr_t"] = type_names["guintptr"]
+type_names["intptr_t"] = type_names["gintptr"]
+type_names["time_t"] = TYPE_TIME_T
+type_names["off_t"] = TYPE_OFF_T
+type_names["pid_t"] = TYPE_PID_T
+type_names["uid_t"] = TYPE_UID_T
+type_names["gid_t"] = TYPE_GID_T
+type_names["dev_t"] = TYPE_DEV_T
+type_names["socklen_t"] = TYPE_SOCKLEN_T
 
 # Obj-C
-type_names['id'] = TYPE_ANY
+type_names["id"] = TYPE_ANY
 
 # Parameters
-PARAM_DIRECTION_IN = 'in'
-PARAM_DIRECTION_OUT = 'out'
-PARAM_DIRECTION_INOUT = 'inout'
+PARAM_DIRECTION_IN = "in"
+PARAM_DIRECTION_OUT = "out"
+PARAM_DIRECTION_INOUT = "inout"
 
-PARAM_SCOPE_CALL = 'call'
-PARAM_SCOPE_ASYNC = 'async'
-PARAM_SCOPE_NOTIFIED = 'notified'
-PARAM_SCOPE_FOREVER = 'forever'
+PARAM_SCOPE_CALL = "call"
+PARAM_SCOPE_ASYNC = "async"
+PARAM_SCOPE_NOTIFIED = "notified"
+PARAM_SCOPE_FOREVER = "forever"
 
-PARAM_TRANSFER_NONE = 'none'
-PARAM_TRANSFER_CONTAINER = 'container'
-PARAM_TRANSFER_FULL = 'full'
+PARAM_TRANSFER_NONE = "none"
+PARAM_TRANSFER_CONTAINER = "container"
+PARAM_TRANSFER_FULL = "full"
 
-SIGNAL_FIRST = 'first'
-SIGNAL_LAST = 'last'
-SIGNAL_CLEANUP = 'cleanup'
-SIGNAL_MUST_COLLECT = 'must-collect'
+SIGNAL_FIRST = "first"
+SIGNAL_LAST = "last"
+SIGNAL_CLEANUP = "cleanup"
+SIGNAL_MUST_COLLECT = "must-collect"
 
 
 class Namespace(object):
@@ -439,37 +449,37 @@ class Namespace(object):
             self.symbol_prefixes = [to_underscores(p).lower() for p in ps]
         # cache upper-cased versions
         self._ucase_symbol_prefixes = [p.upper() for p in self.symbol_prefixes]
-        self.names = OrderedDict()   # Maps from GIName -> node
-        self.aliases = {}            # Maps from GIName -> GIName
-        self.type_names = {}         # Maps from GTName -> node
-        self.ctypes = {}             # Maps from CType -> node
-        self.symbols = {}            # Maps from function symbols -> Function
+        self.names = OrderedDict()  # Maps from GIName -> node
+        self.aliases = {}  # Maps from GIName -> GIName
+        self.type_names = {}  # Maps from GTName -> node
+        self.ctypes = {}  # Maps from CType -> node
+        self.symbols = {}  # Maps from function symbols -> Function
         # Immediate includes only, not their transitive closure:
-        self.includes = set()        # Include
-        self.shared_libraries = []   # str
-        self.c_includes = []         # str
+        self.includes = set()  # Include
+        self.shared_libraries = []  # str
+        self.c_includes = []  # str
         self.exported_packages = []  # str
         self.doc_format = "unknown"
 
     def type_from_name(self, name, ctype=None):
         """Backwards compatibility method for older .gir files, which
-only use the 'name' attribute.  If name refers to a fundamental type,
-create a Type object referncing it.  If name is already a
-fully-qualified GIName like 'Foo.Bar', returns a Type targeting it .
-Otherwise a Type targeting name qualififed with the namespace name is
-returned."""
+        only use the 'name' attribute.  If name refers to a fundamental type,
+        create a Type object referncing it.  If name is already a
+        fully-qualified GIName like 'Foo.Bar', returns a Type targeting it .
+        Otherwise a Type targeting name qualififed with the namespace name is
+        returned."""
         if name in type_names:
             return Type(target_fundamental=name, ctype=ctype)
-        if '.' in name:
+        if "." in name:
             target = name
         else:
-            target = '%s.%s' % (self.name, name)
+            target = "%s.%s" % (self.name, name)
         return Type(target_giname=target, ctype=ctype)
 
     def track(self, node):
         """Doesn't directly append the function to our own namespace,
-but adds it to things like ctypes, symbols, and type_names.
-"""
+        but adds it to things like ctypes, symbols, and type_names.
+        """
         assert isinstance(node, Node)
         if node.namespace is self:
             return
@@ -502,14 +512,14 @@ but adds it to things like ctypes, symbols, and type_names.
             for member in node.members:
                 member.namespace = self
                 self.symbols[member.symbol] = member
-        if hasattr(node, 'ctype'):
+        if hasattr(node, "ctype"):
             self.ctypes[node.ctype] = node
 
     def append(self, node, replace=False):
         previous = self.names.get(node.name)
         if previous is not None:
             if not replace:
-                raise ValueError("Namespace conflict: %r" % (node, ))
+                raise ValueError("Namespace conflict: %r" % (node,))
             self.remove(previous)
 
         self.track(node)
@@ -520,7 +530,7 @@ but adds it to things like ctypes, symbols, and type_names.
             del self.aliases[node.name]
         elif isinstance(node, Registered) and node.gtype_name is not None:
             del self.type_names[node.gtype_name]
-        if hasattr(node, 'ctype'):
+        if hasattr(node, "ctype"):
             del self.ctypes[node.ctype]
         if isinstance(node, Function):
             del self.symbols[node.symbol]
@@ -529,8 +539,8 @@ but adds it to things like ctypes, symbols, and type_names.
 
     def float(self, node):
         """Like remove(), but doesn't unset the node's namespace
-back-reference, and it's still possible to look up
-functions via get_by_symbol()."""
+        back-reference, and it's still possible to look up
+        functions via get_by_symbol()."""
         if isinstance(node, Function):
             symbol = node.symbol
         self.remove(node)
@@ -561,14 +571,13 @@ functions via get_by_symbol()."""
 
 
 class Include(object):
-
     def __init__(self, name, version):
         self.name = name
         self.version = version
 
     @classmethod
     def from_string(cls, string):
-        return cls(*string.split('-', 1))
+        return cls(*string.split("-", 1))
 
     def _compare(self, other, op):
         return op((self.name, self.version), (other.name, other.version))
@@ -595,12 +604,13 @@ class Include(object):
         return hash(str(self))
 
     def __str__(self):
-        return '%s-%s' % (self.name, self.version)
+        return "%s-%s" % (self.name, self.version)
 
 
 class Annotated(object):
     """An object which has a few generic metadata
-properties."""
+    properties."""
+
     def __init__(self):
         self.version = None
         self.version_doc = None
@@ -617,16 +627,17 @@ properties."""
 
 class Node(Annotated):
     """A node is a type of object which is uniquely identified by its
-(namespace, name) pair.  When combined with a ., this is called a
-GIName.  It's possible for nodes to contain or point to other nodes."""
+    (namespace, name) pair.  When combined with a ., this is called a
+    GIName.  It's possible for nodes to contain or point to other nodes."""
 
-    c_name = property(lambda self: self.namespace.name + self.name if self.namespace else
-                      self.name)
-    gi_name = property(lambda self: '%s.%s' % (self.namespace.name, self.name))
+    c_name = property(
+        lambda self: self.namespace.name + self.name if self.namespace else self.name
+    )
+    gi_name = property(lambda self: "%s.%s" % (self.namespace.name, self.name))
 
     def __init__(self, name=None):
         Annotated.__init__(self)
-        self.namespace = None   # Should be set later by Namespace.append()
+        self.namespace = None  # Should be set later by Namespace.append()
         self.name = name
         self.foreign = False
         self.file_positions = set()
@@ -640,12 +651,13 @@ GIName.  It's possible for nodes to contain or point to other nodes."""
 
     def _set_parent(self, value):
         self._parent = value
+
     parent = property(_get_parent, _set_parent)
 
     def create_type(self):
         """Create a Type object referencing this node."""
         assert self.namespace is not None
-        return Type(target_giname=('%s.%s' % (self.namespace.name, self.name)))
+        return Type(target_giname=("%s.%s" % (self.namespace.name, self.name)))
 
     def _compare(self, other, op):
         return op((self.namespace, self.name), (other.namespace, other.name))
@@ -695,12 +707,19 @@ GIName.  It's possible for nodes to contain or point to other nodes."""
 
     def add_symbol_reference(self, symbol):
         if symbol.source_filename:
-            self.add_file_position(Position(symbol.source_filename, symbol.line,
-                is_typedef=symbol.type in (CTYPE_TYPEDEF, CSYMBOL_TYPE_TYPEDEF)))
+            self.add_file_position(
+                Position(
+                    symbol.source_filename,
+                    symbol.line,
+                    is_typedef=symbol.type in (CTYPE_TYPEDEF, CSYMBOL_TYPE_TYPEDEF),
+                )
+            )
 
     def walk(self, callback, chain):
         res = callback(self, chain)
-        assert res in (True, False), "Walk function must return boolean, not %r" % (res, )
+        assert res in (True, False), "Walk function must return boolean, not %r" % (
+            res,
+        )
         if not res:
             return False
         chain.append(self)
@@ -718,15 +737,16 @@ class DocSection(Node):
 
 class Registered:
     """A node that (possibly) has gtype_name and get_type."""
+
     def __init__(self, gtype_name, get_type):
-        assert (gtype_name is None and get_type is None) or \
-               (gtype_name is not None and get_type is not None)
+        assert (gtype_name is None and get_type is None) or (
+            gtype_name is not None and get_type is not None
+        )
         self.gtype_name = gtype_name
         self.get_type = get_type
 
 
 class Callable(Node):
-
     def __init__(self, name, retval, parameters, throws):
         Node.__init__(self, name)
         self.retval = retval
@@ -745,6 +765,7 @@ class Callable(Node):
         self._retval = value
         if self._retval is not None:
             self._retval.parent = self
+
     retval = property(_get_retval, _set_retval)
 
     def _get_instance_parameter(self):
@@ -754,8 +775,8 @@ class Callable(Node):
         self._instance_parameter = value
         if value is not None:
             value.parent = self
-    instance_parameter = property(_get_instance_parameter,
-                                  _set_instance_parameter)
+
+    instance_parameter = property(_get_instance_parameter, _set_instance_parameter)
 
     def _get_parameters(self):
         return self._parameters
@@ -764,6 +785,7 @@ class Callable(Node):
         self._parameters = value
         for param in self._parameters:
             param.parent = self
+
     parameters = property(_get_parameters, _set_parameters)
 
     # Returns all parameters, including the instance parameter
@@ -778,13 +800,13 @@ class Callable(Node):
         for i, parameter in enumerate(self.parameters):
             if parameter.argname == name:
                 return i
-        raise ValueError("Unknown argument %s" % (name, ))
+        raise ValueError("Unknown argument %s" % (name,))
 
     def get_parameter(self, name):
         for parameter in self.all_parameters:
             if parameter.argname == name:
                 return parameter
-        raise ValueError("Unknown argument %s" % (name, ))
+        raise ValueError("Unknown argument %s" % (name,))
 
 
 class FunctionMacro(Node):
@@ -796,18 +818,17 @@ class FunctionMacro(Node):
 
 
 class Function(Callable):
-
     def __init__(self, name, retval, parameters, throws, symbol):
         Callable.__init__(self, name, retval, parameters, throws)
         self.symbol = symbol
         self.is_method = False
         self.is_constructor = False
-        self.shadowed_by = None         # C symbol string
-        self.shadows = None             # C symbol string
-        self.moved_to = None            # namespaced function name string
-        self.internal_skipped = False   # if True, this func will not be written to GIR
-        self.set_property = None        # Property name
-        self.get_property = None        # Property name
+        self.shadowed_by = None  # C symbol string
+        self.shadows = None  # C symbol string
+        self.moved_to = None  # namespaced function name string
+        self.internal_skipped = False  # if True, this func will not be written to GIR
+        self.set_property = None  # Property name
+        self.get_property = None  # Property name
         self.is_inline = False
 
     def clone(self):
@@ -821,7 +842,7 @@ class Function(Callable):
 
     def is_type_meta_function(self):
         # Named correctly
-        if not (self.name.endswith('_get_type') or self.name.endswith('_get_gtype')):
+        if not (self.name.endswith("_get_type") or self.name.endswith("_get_gtype")):
             return False
 
         # Doesn't have any parameters
@@ -830,7 +851,7 @@ class Function(Callable):
 
         # Returns GType
         rettype = self.retval.type
-        if (not rettype.is_equiv(TYPE_GTYPE) and rettype.target_giname != 'Gtk.Type'):
+        if not rettype.is_equiv(TYPE_GTYPE) and rettype.target_giname != "Gtk.Type":
             warn("function '%s' returns '%r', not a GType" % (self.name, rettype))
             return False
 
@@ -838,46 +859,43 @@ class Function(Callable):
 
 
 class ErrorQuarkFunction(Function):
-
     def __init__(self, name, retval, parameters, throws, symbol, error_domain):
         Function.__init__(self, name, retval, parameters, throws, symbol)
         self.error_domain = error_domain
 
 
 class VFunction(Callable):
-
     def __init__(self, name, retval, parameters, throws):
         Callable.__init__(self, name, retval, parameters, throws)
         self.invoker = None
 
     @classmethod
     def from_callback(cls, name, cb):
-        obj = cls(name, cb.retval, cb.parameters[1:],
-                  cb.throws)
+        obj = cls(name, cb.retval, cb.parameters[1:], cb.throws)
         return obj
 
 
 class Varargs(Type):
-
     def __init__(self):
-        Type.__init__(self, '<varargs>', target_fundamental='<varargs>')
+        Type.__init__(self, "<varargs>", target_fundamental="<varargs>")
 
 
 class Array(Type):
-    C = '<c>'
-    GLIB_ARRAY = 'GLib.Array'
-    GLIB_BYTEARRAY = 'GLib.ByteArray'
-    GLIB_PTRARRAY = 'GLib.PtrArray'
+    C = "<c>"
+    GLIB_ARRAY = "GLib.Array"
+    GLIB_BYTEARRAY = "GLib.ByteArray"
+    GLIB_PTRARRAY = "GLib.PtrArray"
 
     def __init__(self, array_type, element_type, **kwargs):
-        Type.__init__(self, target_fundamental='<array>',
-                      **kwargs)
-        if (array_type is None or array_type == self.C):
+        Type.__init__(self, target_fundamental="<array>", **kwargs)
+        if array_type is None or array_type == self.C:
             self.array_type = self.C
         else:
-            assert array_type in (self.GLIB_ARRAY,
-                                  self.GLIB_BYTEARRAY,
-                                  self.GLIB_PTRARRAY), array_type
+            assert array_type in (
+                self.GLIB_ARRAY,
+                self.GLIB_BYTEARRAY,
+                self.GLIB_PTRARRAY,
+            ), array_type
             self.array_type = array_type
         assert isinstance(element_type, Type)
         self.element_type = element_type
@@ -894,10 +912,8 @@ class Array(Type):
 
 
 class List(Type):
-
     def __init__(self, name, element_type, **kwargs):
-        Type.__init__(self, target_fundamental='<list>',
-                      **kwargs)
+        Type.__init__(self, target_fundamental="<list>", **kwargs)
         self.name = name
         assert isinstance(element_type, Type)
         self.element_type = element_type
@@ -907,9 +923,8 @@ class List(Type):
 
 
 class Map(Type):
-
     def __init__(self, key_type, value_type, **kwargs):
-        Type.__init__(self, target_fundamental='<map>', **kwargs)
+        Type.__init__(self, target_fundamental="<map>", **kwargs)
         assert isinstance(key_type, Type)
         self.key_type = key_type
         assert isinstance(value_type, Type)
@@ -920,7 +935,6 @@ class Map(Type):
 
 
 class Alias(Node):
-
     def __init__(self, name, target, ctype=None):
         Node.__init__(self, name)
         self.target = target
@@ -947,12 +961,22 @@ class TypeContainer(Annotated):
 class Parameter(TypeContainer):
     """An argument to a function."""
 
-    def __init__(self, argname, typenode, direction=None,
-                 transfer=None, nullable=False, optional=False,
-                 allow_none=False, scope=None,
-                 caller_allocates=False, not_nullable=False):
-        TypeContainer.__init__(self, typenode, nullable, not_nullable,
-                               transfer, direction)
+    def __init__(
+        self,
+        argname,
+        typenode,
+        direction=None,
+        transfer=None,
+        nullable=False,
+        optional=False,
+        allow_none=False,
+        scope=None,
+        caller_allocates=False,
+        not_nullable=False,
+    ):
+        TypeContainer.__init__(
+            self, typenode, nullable, not_nullable, transfer, direction
+        )
         self.argname = argname
         self.optional = optional
         self.parent = None  # A Callable
@@ -976,20 +1000,23 @@ class Parameter(TypeContainer):
 class Return(TypeContainer):
     """A return value from a function."""
 
-    def __init__(self, rtype, nullable=False, not_nullable=False,
-                 transfer=None):
-        TypeContainer.__init__(self, rtype, nullable, not_nullable, transfer,
-                               direction=PARAM_DIRECTION_OUT)
+    def __init__(self, rtype, nullable=False, not_nullable=False, transfer=None):
+        TypeContainer.__init__(
+            self, rtype, nullable, not_nullable, transfer, direction=PARAM_DIRECTION_OUT
+        )
         self.parent = None  # A Callable
 
 
 class Enum(Node, Registered):
-
-    def __init__(self, name, ctype,
-                 gtype_name=None,
-                 get_type=None,
-                 c_symbol_prefix=None,
-                 members=None):
+    def __init__(
+        self,
+        name,
+        ctype,
+        gtype_name=None,
+        get_type=None,
+        c_symbol_prefix=None,
+        members=None,
+    ):
         Node.__init__(self, name)
         Registered.__init__(self, gtype_name, get_type)
         self.c_symbol_prefix = c_symbol_prefix
@@ -1007,12 +1034,15 @@ class Enum(Node, Registered):
 
 
 class Bitfield(Node, Registered):
-
-    def __init__(self, name, ctype,
-                 gtype_name=None,
-                 c_symbol_prefix=None,
-                 get_type=None,
-                 members=None):
+    def __init__(
+        self,
+        name,
+        ctype,
+        gtype_name=None,
+        c_symbol_prefix=None,
+        get_type=None,
+        members=None,
+    ):
         Node.__init__(self, name)
         Registered.__init__(self, gtype_name, get_type)
         self.ctype = ctype
@@ -1028,7 +1058,6 @@ class Bitfield(Node, Registered):
 
 
 class Member(Annotated):
-
     def __init__(self, name, value, symbol, nick=None, dump_name=None):
         Annotated.__init__(self)
         self.name = name
@@ -1067,15 +1096,18 @@ class Member(Annotated):
 
 
 class Compound(Node, Registered):
-    def __init__(self, name,
-                 ctype=None,
-                 gtype_name=None,
-                 get_type=None,
-                 c_symbol_prefix=None,
-                 disguised=False,
-                 opaque=False,
-                 pointer=False,
-                 tag_name=None):
+    def __init__(
+        self,
+        name,
+        ctype=None,
+        gtype_name=None,
+        get_type=None,
+        c_symbol_prefix=None,
+        disguised=False,
+        opaque=False,
+        pointer=False,
+        tag_name=None,
+    ):
         Node.__init__(self, name)
         Registered.__init__(self, gtype_name, get_type)
         self.ctype = ctype
@@ -1111,21 +1143,21 @@ class Compound(Node, Registered):
         for field in self.fields:
             if field.name == name:
                 return field
-        raise ValueError("Unknown field %s" % (name, ))
+        raise ValueError("Unknown field %s" % (name,))
 
     def get_field_index(self, name):
         for i, field in enumerate(self.fields):
             if field.name == name:
                 return i
-        raise ValueError("Unknown field %s" % (name, ))
+        raise ValueError("Unknown field %s" % (name,))
 
 
 class Field(Annotated):
-
-    def __init__(self, name, typenode, readable, writable, bits=None,
-                 anonymous_node=None):
+    def __init__(
+        self, name, typenode, readable, writable, bits=None, anonymous_node=None
+    ):
         Annotated.__init__(self)
-        assert (typenode or anonymous_node)
+        assert typenode or anonymous_node
         self.name = name
         self.type = typenode
         self.readable = readable
@@ -1165,25 +1197,30 @@ class Field(Annotated):
 
 
 class Record(Compound):
-
-    def __init__(self, name,
-                 ctype=None,
-                 gtype_name=None,
-                 get_type=None,
-                 c_symbol_prefix=None,
-                 disguised=False,
-                 opaque=False,
-                 pointer=False,
-                 tag_name=None):
-        Compound.__init__(self, name,
-                          ctype=ctype,
-                          gtype_name=gtype_name,
-                          get_type=get_type,
-                          c_symbol_prefix=c_symbol_prefix,
-                          disguised=disguised,
-                          opaque=opaque,
-                          pointer=pointer,
-                          tag_name=tag_name)
+    def __init__(
+        self,
+        name,
+        ctype=None,
+        gtype_name=None,
+        get_type=None,
+        c_symbol_prefix=None,
+        disguised=False,
+        opaque=False,
+        pointer=False,
+        tag_name=None,
+    ):
+        Compound.__init__(
+            self,
+            name,
+            ctype=ctype,
+            gtype_name=gtype_name,
+            get_type=get_type,
+            c_symbol_prefix=c_symbol_prefix,
+            disguised=disguised,
+            opaque=opaque,
+            pointer=pointer,
+            tag_name=tag_name,
+        )
         # If non-None, this record defines the FooClass C structure
         # for some Foo GObject (or similar for GInterface)
         self.is_gtype_struct_for = None
@@ -1196,25 +1233,30 @@ class Record(Compound):
 
 
 class Union(Compound):
-
-    def __init__(self, name,
-                 ctype=None,
-                 gtype_name=None,
-                 get_type=None,
-                 c_symbol_prefix=None,
-                 disguised=False,
-                 opaque=False,
-                 pointer=False,
-                 tag_name=None):
-        Compound.__init__(self, name,
-                          ctype=ctype,
-                          gtype_name=gtype_name,
-                          get_type=get_type,
-                          c_symbol_prefix=c_symbol_prefix,
-                          disguised=disguised,
-                          opaque=opaque,
-                          pointer=pointer,
-                          tag_name=tag_name)
+    def __init__(
+        self,
+        name,
+        ctype=None,
+        gtype_name=None,
+        get_type=None,
+        c_symbol_prefix=None,
+        disguised=False,
+        opaque=False,
+        pointer=False,
+        tag_name=None,
+    ):
+        Compound.__init__(
+            self,
+            name,
+            ctype=ctype,
+            gtype_name=gtype_name,
+            get_type=get_type,
+            c_symbol_prefix=c_symbol_prefix,
+            disguised=disguised,
+            opaque=opaque,
+            pointer=pointer,
+            tag_name=tag_name,
+        )
         # If non-None, this union has a copy function for heap
         # allocated instances
         self.copy_func = None
@@ -1225,10 +1267,8 @@ class Union(Compound):
 
 class Boxed(Node, Registered):
     """A boxed type with no known associated structure/union."""
-    def __init__(self, name,
-                 gtype_name=None,
-                 get_type=None,
-                 c_symbol_prefix=None):
+
+    def __init__(self, name, gtype_name=None, get_type=None, c_symbol_prefix=None):
         assert gtype_name is not None
         assert get_type is not None
         Node.__init__(self, name)
@@ -1251,10 +1291,8 @@ class Boxed(Node, Registered):
 
 class Pointer(Node, Registered):
     """A pointer type with no known associated structure/union."""
-    def __init__(self, name,
-                 gtype_name=None,
-                 get_type=None,
-                 c_symbol_prefix=None):
+
+    def __init__(self, name, gtype_name=None, get_type=None, c_symbol_prefix=None):
         assert gtype_name is not None
         assert get_type is not None
         Node.__init__(self, name)
@@ -1276,10 +1314,17 @@ class Pointer(Node, Registered):
 
 
 class Signal(Callable):
-
-    def __init__(self, name, retval, parameters, when=None,
-                 no_recurse=False, detailed=False, action=False,
-                 no_hooks=False):
+    def __init__(
+        self,
+        name,
+        retval,
+        parameters,
+        when=None,
+        no_recurse=False,
+        detailed=False,
+        action=False,
+        no_hooks=False,
+    ):
         Callable.__init__(self, name, retval, parameters, False)
         self.when = when
         self.no_recurse = no_recurse
@@ -1290,14 +1335,17 @@ class Signal(Callable):
 
 
 class Class(Node, Registered):
-
-    def __init__(self, name, parent_type,
-                 ctype=None,
-                 gtype_name=None,
-                 get_type=None,
-                 c_symbol_prefix=None,
-                 is_abstract=False,
-                 is_final=False):
+    def __init__(
+        self,
+        name,
+        parent_type,
+        ctype=None,
+        gtype_name=None,
+        get_type=None,
+        c_symbol_prefix=None,
+        is_abstract=False,
+        is_final=False,
+    ):
         Node.__init__(self, name)
         Registered.__init__(self, gtype_name, get_type)
         self.ctype = ctype
@@ -1343,12 +1391,15 @@ class Class(Node, Registered):
 
 
 class Interface(Node, Registered):
-
-    def __init__(self, name, parent_type,
-                 ctype=None,
-                 gtype_name=None,
-                 get_type=None,
-                 c_symbol_prefix=None):
+    def __init__(
+        self,
+        name,
+        parent_type,
+        ctype=None,
+        gtype_name=None,
+        get_type=None,
+        c_symbol_prefix=None,
+    ):
         Node.__init__(self, name)
         Registered.__init__(self, gtype_name, get_type)
         self.ctype = ctype
@@ -1382,7 +1433,6 @@ class Interface(Node, Registered):
 
 
 class Constant(Node):
-
     def __init__(self, name, value_type, value, ctype):
         Node.__init__(self, name)
         self.value_type = value_type
@@ -1391,9 +1441,16 @@ class Constant(Node):
 
 
 class Property(Node):
-
-    def __init__(self, name, typeobj, readable, writable,
-                 construct, construct_only, transfer=None):
+    def __init__(
+        self,
+        name,
+        typeobj,
+        readable,
+        writable,
+        construct,
+        construct_only,
+        transfer=None,
+    ):
         Node.__init__(self, name)
         self.type = typeobj
         self.readable = readable
@@ -1411,7 +1468,6 @@ class Property(Node):
 
 
 class Callback(Callable):
-
     def __init__(self, name, retval, parameters, throws, ctype=None):
         Callable.__init__(self, name, retval, parameters, throws)
         self.ctype = ctype

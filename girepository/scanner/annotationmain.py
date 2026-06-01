@@ -26,10 +26,15 @@ import codecs
 from contextlib import contextmanager
 
 import giscanner
-from giscanner.annotationparser import GtkDocCommentBlockParser, GtkDocCommentBlockWriter
-from giscanner.scannermain import (get_preprocessor_option_group,
-                                   create_source_scanner,
-                                   process_packages)
+from giscanner.annotationparser import (
+    GtkDocCommentBlockParser,
+    GtkDocCommentBlockWriter,
+)
+from giscanner.scannermain import (
+    get_preprocessor_option_group,
+    create_source_scanner,
+    process_packages,
+)
 
 
 @contextmanager
@@ -47,22 +52,37 @@ def encode_stdout(encoding):
 
 
 def annotation_main(args):
-    parser = optparse.OptionParser('%prog [options] sources',
-                                   version='%prog ' + giscanner.__version__)
+    parser = optparse.OptionParser(
+        "%prog [options] sources", version="%prog " + giscanner.__version__
+    )
 
     group = optparse.OptionGroup(parser, "Tool modes, one is required")
-    group.add_option("-e", "--extract",
-                     action="store_true", dest="extract",
-                     help="Extract annotations from the input files")
+    group.add_option(
+        "-e",
+        "--extract",
+        action="store_true",
+        dest="extract",
+        help="Extract annotations from the input files",
+    )
     parser.add_option_group(group)
 
     group = get_preprocessor_option_group(parser)
-    group.add_option("-L", "--library-path",
-                     action="append", dest="library_paths", default=[],
-                     help="directories to search for libraries")
-    group.add_option("", "--pkg",
-                     action="append", dest="packages", default=[],
-                     help="pkg-config packages to get cflags from")
+    group.add_option(
+        "-L",
+        "--library-path",
+        action="append",
+        dest="library_paths",
+        default=[],
+        help="directories to search for libraries",
+    )
+    group.add_option(
+        "",
+        "--pkg",
+        action="append",
+        dest="packages",
+        default=[],
+        help="pkg-config packages to get cflags from",
+    )
     parser.add_option_group(group)
 
     options, args = parser.parse_args(args)
@@ -80,17 +100,17 @@ def annotation_main(args):
         writer = GtkDocCommentBlockWriter(indent=False)
         blocks = parser.parse_comment_blocks(ss.get_comments())
 
-        with encode_stdout('utf-8'):
-            print('/' + ('*' * 60) + '/')
-            print('/* THIS FILE IS GENERATED DO NOT EDIT */')
-            print('/' + ('*' * 60) + '/')
-            print('')
+        with encode_stdout("utf-8"):
+            print("/" + ("*" * 60) + "/")
+            print("/* THIS FILE IS GENERATED DO NOT EDIT */")
+            print("/" + ("*" * 60) + "/")
+            print("")
             for block in sorted(blocks.values()):
                 print(writer.write(block))
-                print('')
-            print('')
-            print('/' + ('*' * 60) + '/')
-            print('/* THIS FILE IS GENERATED DO NOT EDIT */')
-            print('/' + ('*' * 60) + '/')
+                print("")
+            print("")
+            print("/" + ("*" * 60) + "/")
+            print("/* THIS FILE IS GENERATED DO NOT EDIT */")
+            print("/" + ("*" * 60) + "/")
 
     return 0

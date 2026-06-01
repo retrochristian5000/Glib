@@ -25,7 +25,6 @@ from .annotationparser import TAG_RETURNS
 
 
 class IntrospectablePass(object):
-
     def __init__(self, transformer, blocks):
         self._transformer = transformer
         self._namespace = transformer.namespace
@@ -51,23 +50,22 @@ class IntrospectablePass(object):
             return
 
         block = None
-        if hasattr(parent, 'symbol'):
-            prefix = '%s: ' % (parent.symbol, )
+        if hasattr(parent, "symbol"):
+            prefix = "%s: " % (parent.symbol,)
             block = self._blocks.get(parent.symbol)
             if block:
                 position = block.position
         else:
-            prefix = ''
+            prefix = ""
         if isinstance(param, girast.Parameter):
-            context = "argument %s: " % (param.argname, )
+            context = "argument %s: " % (param.argname,)
         else:
             context = "return value: "
             if block:
                 return_tag = block.tags.get(TAG_RETURNS)
                 if return_tag:
                     position = return_tag.position
-        message.warn_node(parent, prefix + context + text,
-                          positions=position)
+        message.warn_node(parent, prefix + context + text, positions=position)
 
     def _introspectable_param_analysis(self, parent, node):
         is_return = isinstance(node, girast.Return)
@@ -81,8 +79,9 @@ class IntrospectablePass(object):
             return
 
         if not node.type.resolved:
-            self._parameter_warning(parent, node,
-                                    "Unresolved type: '%s'" % (node.type.unresolved_string, ))
+            self._parameter_warning(
+                parent, node, "Unresolved type: '%s'" % (node.type.unresolved_string,)
+            )
             parent.introspectable = False
             return
 
@@ -90,40 +89,51 @@ class IntrospectablePass(object):
             parent.introspectable = False
             return
 
-        if (isinstance(node.type, (girast.List, girast.Array))
-        and node.type.element_type == girast.TYPE_ANY):
+        if (
+            isinstance(node.type, (girast.List, girast.Array))
+            and node.type.element_type == girast.TYPE_ANY
+        ):
             self._parameter_warning(parent, node, "Missing (element-type) annotation")
             parent.introspectable = False
             return
 
-        if (is_parameter
-        and isinstance(target, girast.Callback)
-        and target.gi_name not in ('GLib.DestroyNotify', 'Gio.AsyncReadyCallback')
-        and node.scope is None):
+        if (
+            is_parameter
+            and isinstance(target, girast.Callback)
+            and target.gi_name not in ("GLib.DestroyNotify", "Gio.AsyncReadyCallback")
+            and node.scope is None
+        ):
             self._parameter_warning(
                 parent,
                 node,
-                "Missing (scope) annotation for callback without GDestroyNotify (valid: call, async, forever)")
+                "Missing (scope) annotation for callback without GDestroyNotify (valid: call, async, forever)",
+            )
 
             parent.introspectable = False
             return
 
         if is_return and isinstance(target, girast.Callback):
-            self._parameter_warning(parent, node, "Callbacks cannot be return values; use (skip)")
+            self._parameter_warning(
+                parent, node, "Callbacks cannot be return values; use (skip)"
+            )
             parent.introspectable = False
             return
 
-        if (is_return
-        and isinstance(target, (girast.Record, girast.Union))
-        and target.get_type is None
-        and (target.copy_func is None or target.free_func is None)
-        and not target.foreign):
+        if (
+            is_return
+            and isinstance(target, (girast.Record, girast.Union))
+            and target.get_type is None
+            and (target.copy_func is None or target.free_func is None)
+            and not target.foreign
+        ):
             if node.transfer != girast.PARAM_TRANSFER_NONE:
                 self._parameter_warning(
-                    parent, node,
+                    parent,
+                    node,
                     "Invalid non-constant return of bare structure or union; "
                     "register as boxed type, add (copy-func) and (free-func), "
-                    "or (skip)")
+                    "or (skip)",
+                )
                 parent.introspectable = False
             return
 
@@ -140,8 +150,9 @@ class IntrospectablePass(object):
         if isinstance(typeval, (girast.Array, girast.List)):
             return self._type_is_introspectable(typeval.element_type)
         elif isinstance(typeval, girast.Map):
-            return (self._type_is_introspectable(typeval.key_type)
-                    and self._type_is_introspectable(typeval.value_type))
+            return self._type_is_introspectable(
+                typeval.key_type
+            ) and self._type_is_introspectable(typeval.value_type)
         if typeval.target_foreign:
             return True
         if typeval.target_fundamental:
@@ -150,7 +161,9 @@ class IntrospectablePass(object):
             # These are not introspectable pending us adding
             # larger type tags to the typelib (in theory these could
             # be 128 bit or larger)
-            elif typeval.is_equiv((girast.TYPE_LONG_LONG, girast.TYPE_LONG_ULONG, girast.TYPE_LONG_DOUBLE)):
+            elif typeval.is_equiv(
+                (girast.TYPE_LONG_LONG, girast.TYPE_LONG_ULONG, girast.TYPE_LONG_DOUBLE)
+            ):
                 return False
             else:
                 return True
@@ -191,7 +204,9 @@ class IntrospectablePass(object):
             for param in obj.parameters:
                 self._introspectable_param_analysis(obj, param)
             self._introspectable_param_analysis(obj, obj.retval)
-        if isinstance(obj, (girast.Class, girast.Interface, girast.Record, girast.Union)):
+        if isinstance(
+            obj, (girast.Class, girast.Interface, girast.Record, girast.Union)
+        ):
             for field in obj.fields:
                 if field.type:
                     if not self._type_is_introspectable(field.type):
@@ -225,7 +240,9 @@ class IntrospectablePass(object):
                         parent,
                         obj,
                         "Emitter method %s for signal %s::%s does not have the "
-                        "same return value type" % (method.symbol, parent.name, obj.name))
+                        "same return value type"
+                        % (method.symbol, parent.name, obj.name),
+                    )
                     obj.emitter = None
                     return False
                 n_emitter_params = len(method.parameters)
@@ -235,7 +252,9 @@ class IntrospectablePass(object):
                         parent,
                         obj,
                         "Emitter method %s for signal %s::%s does not have the "
-                        "same number of arguments (expected: %d)" % (method.symbol, parent.name, obj.name, n_signal_params))
+                        "same number of arguments (expected: %d)"
+                        % (method.symbol, parent.name, obj.name, n_signal_params),
+                    )
                     obj.emitter = None
                     return False
                 for idx, signal_param in enumerate(obj.parameters):
@@ -245,7 +264,9 @@ class IntrospectablePass(object):
                             parent,
                             obj,
                             "Emitter method %s for signal %s::%s does not have the "
-                            "same type of arguments" % (method.symbol, parent.name, obj.name))
+                            "same type of arguments"
+                            % (method.symbol, parent.name, obj.name),
+                        )
                         obj.emitter = None
                         return False
         return True
@@ -278,7 +299,9 @@ class IntrospectablePass(object):
         if obj.skip:
             return False
         # Propagate introspectability for fields
-        if isinstance(obj, (girast.Class, girast.Interface, girast.Record, girast.Union)):
+        if isinstance(
+            obj, (girast.Class, girast.Interface, girast.Record, girast.Union)
+        ):
             for field in obj.fields:
                 if field.anonymous_node:
                     if not field.anonymous_node.introspectable:
@@ -295,38 +318,47 @@ class IntrospectablePass(object):
     def _remove_non_reachable_backcompat_copies(self, obj, stack):
         if obj.skip:
             return False
-        if (isinstance(obj, girast.Function) and obj.moved_to is not None):
+        if isinstance(obj, girast.Function) and obj.moved_to is not None:
             # remove functions that are not introspectable
             if not obj.introspectable:
                 obj.internal_skipped = True
         return True
 
     def _property_warning(self, parent, prop, text, position=None):
-        context = "property %s:%s: " % (parent.name, prop.name, )
+        context = "property %s:%s: " % (
+            parent.name,
+            prop.name,
+        )
         message.strict_node(parent, context + text, positions=position)
 
     def _property_signal_collision(self, obj, prop):
         for s in obj.signals:
             if s.skip or not s.introspectable:
                 continue
-            if s.name.replace('-', '_') == prop.name.replace('-', '_'):
-                self._property_warning(obj, prop, "Properties cannot have the same name as signals")
+            if s.name.replace("-", "_") == prop.name.replace("-", "_"):
+                self._property_warning(
+                    obj, prop, "Properties cannot have the same name as signals"
+                )
         return False
 
     def _property_method_collision(self, obj, prop):
         for m in obj.methods:
             if m.skip or not m.introspectable:
                 continue
-            if m.name == prop.name.replace('-', '_'):
-                self._property_warning(obj, prop, "Properties cannot have the same name as methods")
+            if m.name == prop.name.replace("-", "_"):
+                self._property_warning(
+                    obj, prop, "Properties cannot have the same name as methods"
+                )
         return False
 
     def _property_vfunc_collision(self, obj, prop):
         for vfunc in obj.virtual_methods:
             if vfunc.skip or not vfunc.introspectable:
                 continue
-            if vfunc.name == prop.name.replace('-', '_'):
-                self._property_warning(obj, prop, "Properties cannot have the same name as virtual methods")
+            if vfunc.name == prop.name.replace("-", "_"):
+                self._property_warning(
+                    obj, prop, "Properties cannot have the same name as virtual methods"
+                )
         return False
 
     def _introspectable_symbol_collisions(self, obj, stack):

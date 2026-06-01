@@ -27,9 +27,7 @@ import operator
 
 from .utils import break_on_debug_flag
 
-(WARNING,
- ERROR,
- FATAL) = range(3)
+WARNING, ERROR, FATAL = range(3)
 
 
 class Position(object):
@@ -38,7 +36,7 @@ class Position(object):
     want to inform about.
     """
 
-    __slots__ = ('filename', 'line', 'column', 'is_typedef')
+    __slots__ = ("filename", "line", "column", "is_typedef")
 
     def __init__(self, filename=None, line=None, column=None, is_typedef=False):
         self.filename = filename
@@ -47,8 +45,10 @@ class Position(object):
         self.is_typedef = is_typedef
 
     def _compare(self, other, op):
-        return op((self.filename, self.line, self.column),
-                  (other.filename, other.line, other.column))
+        return op(
+            (self.filename, self.line, self.column),
+            (other.filename, other.line, other.column),
+        )
 
     def __lt__(self, other):
         return self._compare(other, operator.lt)
@@ -72,26 +72,32 @@ class Position(object):
         return hash((self.filename, self.line, self.column))
 
     def __repr__(self):
-        return '<Position %s:%d:%d>' % (os.path.basename(self.filename),
-                                        self.line or -1,
-                                        self.column or -1)
+        return "<Position %s:%d:%d>" % (
+            os.path.basename(self.filename),
+            self.line or -1,
+            self.column or -1,
+        )
 
     def format(self, cwd):
         # Windows: We may be using different drives self.filename and cwd,
         #          which leads to a ValuError when using os.path.relpath().
         #          In that case, just use the entire path of self.filename
         try:
-            filename = os.path.relpath(os.path.realpath(self.filename),
-                                       os.path.realpath(cwd))
+            filename = os.path.relpath(
+                os.path.realpath(self.filename), os.path.realpath(cwd)
+            )
         except ValueError:
             filename = os.path.realpath(self.filename)
 
         if self.column is not None:
-            return '%s:%d:%d' % (filename, self.line, self.column)
+            return "%s:%d:%d" % (filename, self.line, self.column)
         elif self.line is not None:
-            return '%s:%d' % (filename, self.line, )
+            return "%s:%d" % (
+                filename,
+                self.line,
+            )
         else:
-            return '%s:' % (filename, )
+            return "%s:" % (filename,)
 
 
 class MessageLogger(object):
@@ -130,12 +136,20 @@ class MessageLogger(object):
     def get_warning_count(self):
         return self._warning_count
 
-    def log(self, log_type, text, positions=None, prefix=None, marker_pos=None, marker_line=None):
+    def log(
+        self,
+        log_type,
+        text,
+        positions=None,
+        prefix=None,
+        marker_pos=None,
+        marker_line=None,
+    ):
         """
         Log a warning, using optional file positioning information.
         If the warning is related to a ast.Node type, see log_node().
         """
-        break_on_debug_flag('warning')
+        break_on_debug_flag("warning")
 
         self._warning_count += 1
 
@@ -148,10 +162,10 @@ class MessageLogger(object):
             positions = [positions]
 
         if not positions:
-            positions = [Position('<unknown>')]
+            positions = [Position("<unknown>")]
 
         for position in positions[:-1]:
-            self._output.write("%s:\n" % (position.format(cwd=self._cwd), ))
+            self._output.write("%s:\n" % (position.format(cwd=self._cwd),))
         last_position = positions[-1].format(cwd=self._cwd)
 
         if log_type == WARNING:
@@ -162,26 +176,34 @@ class MessageLogger(object):
             error_type = "Fatal"
 
         if marker_pos is not None and marker_line is not None:
-            text = '%s\n%s\n%s' % (text, marker_line, ' ' * marker_pos + '^')
+            text = "%s\n%s\n%s" % (text, marker_line, " " * marker_pos + "^")
 
         if prefix:
             if self._namespace:
-                text = ('%s: %s: %s: %s: %s\n' % (last_position, error_type,
-                                                  self._namespace.name, prefix, text))
+                text = "%s: %s: %s: %s: %s\n" % (
+                    last_position,
+                    error_type,
+                    self._namespace.name,
+                    prefix,
+                    text,
+                )
             else:
-                text = ('%s: %s: %s: %s\n' % (last_position, error_type,
-                                              prefix, text))
+                text = "%s: %s: %s: %s\n" % (last_position, error_type, prefix, text)
         else:
             if self._namespace:
-                text = ('%s: %s: %s: %s\n' % (last_position, error_type,
-                                              self._namespace.name, text))
+                text = "%s: %s: %s: %s\n" % (
+                    last_position,
+                    error_type,
+                    self._namespace.name,
+                    text,
+                )
             else:
-                text = ('%s: %s: %s\n' % (last_position, error_type, text))
+                text = "%s: %s: %s\n" % (last_position, error_type, text)
 
         self._output.write(text)
 
         if log_type == FATAL:
-            break_on_debug_flag('fatal')
+            break_on_debug_flag("fatal")
             raise SystemExit(text)
 
     def log_node(self, log_type, node, text, context=None, positions=None):
@@ -194,7 +216,7 @@ class MessageLogger(object):
         """
         if positions:
             pass
-        elif getattr(node, 'file_positions', None):
+        elif getattr(node, "file_positions", None):
             positions = node.file_positions
         elif context and context.file_positions:
             positions = context.file_positions
@@ -202,16 +224,17 @@ class MessageLogger(object):
             positions = set()
 
         if context:
-            text = "%s: %s" % (getattr(context, 'symbol', context.name), text)
-        elif not positions and hasattr(node, 'name'):
+            text = "%s: %s" % (getattr(context, "symbol", context.name), text)
+        elif not positions and hasattr(node, "name"):
             text = "(%s)%s: %s" % (node.__class__.__name__, node.name, text)
 
         self.log(log_type, text, positions)
 
     def log_symbol(self, log_type, symbol, text):
         """Log a warning in the context of the given symbol."""
-        self.log(log_type, text, symbol.position,
-                 prefix="symbol='%s'" % (symbol.ident, ))
+        self.log(
+            log_type, text, symbol.position, prefix="symbol='%s'" % (symbol.ident,)
+        )
 
 
 def log_node(log_type, node, text, context=None, positions=None):

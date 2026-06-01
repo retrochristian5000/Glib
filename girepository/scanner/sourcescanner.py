@@ -27,38 +27,41 @@ from .message import Position
 from .ccompiler import CCompiler
 from .utils import have_debug_flag, dll_dirs
 
-
 dlldirs = dll_dirs()
-dlldirs.add_dll_dirs(['gio-2.0'])
+dlldirs.add_dll_dirs(["gio-2.0"])
 from ._giscanner import SourceScanner as CSourceScanner
 dlldirs.cleanup_dll_dirs()
 
-HEADER_EXTS = ['.h', '.hpp', '.hxx']
-SOURCE_EXTS = ['.c', '.cpp', '.cc', '.cxx']
+HEADER_EXTS = [".h", ".hpp", ".hxx"]
+SOURCE_EXTS = [".c", ".cpp", ".cc", ".cxx"]
 ALL_EXTS = SOURCE_EXTS + HEADER_EXTS
 
-(CSYMBOL_TYPE_INVALID,
- CSYMBOL_TYPE_ELLIPSIS,
- CSYMBOL_TYPE_CONST,
- CSYMBOL_TYPE_OBJECT,
- CSYMBOL_TYPE_FUNCTION,
- CSYMBOL_TYPE_FUNCTION_MACRO,
- CSYMBOL_TYPE_STRUCT,
- CSYMBOL_TYPE_UNION,
- CSYMBOL_TYPE_ENUM,
- CSYMBOL_TYPE_TYPEDEF,
- CSYMBOL_TYPE_MEMBER) = range(11)
+(
+    CSYMBOL_TYPE_INVALID,
+    CSYMBOL_TYPE_ELLIPSIS,
+    CSYMBOL_TYPE_CONST,
+    CSYMBOL_TYPE_OBJECT,
+    CSYMBOL_TYPE_FUNCTION,
+    CSYMBOL_TYPE_FUNCTION_MACRO,
+    CSYMBOL_TYPE_STRUCT,
+    CSYMBOL_TYPE_UNION,
+    CSYMBOL_TYPE_ENUM,
+    CSYMBOL_TYPE_TYPEDEF,
+    CSYMBOL_TYPE_MEMBER,
+) = range(11)
 
-(CTYPE_INVALID,
- CTYPE_VOID,
- CTYPE_BASIC_TYPE,
- CTYPE_TYPEDEF,
- CTYPE_STRUCT,
- CTYPE_UNION,
- CTYPE_ENUM,
- CTYPE_POINTER,
- CTYPE_ARRAY,
- CTYPE_FUNCTION) = range(10)
+(
+    CTYPE_INVALID,
+    CTYPE_VOID,
+    CTYPE_BASIC_TYPE,
+    CTYPE_TYPEDEF,
+    CTYPE_STRUCT,
+    CTYPE_UNION,
+    CTYPE_ENUM,
+    CTYPE_POINTER,
+    CTYPE_ARRAY,
+    CTYPE_FUNCTION,
+) = range(10)
 
 STORAGE_CLASS_NONE = 0
 STORAGE_CLASS_TYPEDEF = 1 << 1
@@ -77,46 +80,57 @@ TYPE_QUALIFIER_EXTENSION = 1 << 4
 FUNCTION_NONE = 0
 FUNCTION_INLINE = 1 << 1
 
-(UNARY_ADDRESS_OF,
- UNARY_POINTER_INDIRECTION,
- UNARY_PLUS,
- UNARY_MINUS,
- UNARY_BITWISE_COMPLEMENT,
- UNARY_LOGICAL_NEGATION) = range(6)
+(
+    UNARY_ADDRESS_OF,
+    UNARY_POINTER_INDIRECTION,
+    UNARY_PLUS,
+    UNARY_MINUS,
+    UNARY_BITWISE_COMPLEMENT,
+    UNARY_LOGICAL_NEGATION,
+) = range(6)
 
 
 def symbol_type_name(symbol_type):
     return {
-        CSYMBOL_TYPE_INVALID: 'invalid',
-        CSYMBOL_TYPE_ELLIPSIS: 'ellipsis',
-        CSYMBOL_TYPE_CONST: 'const',
-        CSYMBOL_TYPE_OBJECT: 'object',
-        CSYMBOL_TYPE_FUNCTION: 'function',
-        CSYMBOL_TYPE_FUNCTION_MACRO: 'function_macro',
-        CSYMBOL_TYPE_STRUCT: 'struct',
-        CSYMBOL_TYPE_UNION: 'union',
-        CSYMBOL_TYPE_ENUM: 'enum',
-        CSYMBOL_TYPE_TYPEDEF: 'typedef',
-        CSYMBOL_TYPE_MEMBER: 'member'}.get(symbol_type)
+        CSYMBOL_TYPE_INVALID: "invalid",
+        CSYMBOL_TYPE_ELLIPSIS: "ellipsis",
+        CSYMBOL_TYPE_CONST: "const",
+        CSYMBOL_TYPE_OBJECT: "object",
+        CSYMBOL_TYPE_FUNCTION: "function",
+        CSYMBOL_TYPE_FUNCTION_MACRO: "function_macro",
+        CSYMBOL_TYPE_STRUCT: "struct",
+        CSYMBOL_TYPE_UNION: "union",
+        CSYMBOL_TYPE_ENUM: "enum",
+        CSYMBOL_TYPE_TYPEDEF: "typedef",
+        CSYMBOL_TYPE_MEMBER: "member",
+    }.get(symbol_type)
 
 
 def ctype_name(ctype):
     return {
-        CTYPE_INVALID: 'invalid',
-        CTYPE_VOID: 'void',
-        CTYPE_BASIC_TYPE: 'basic',
-        CTYPE_TYPEDEF: 'typedef',
-        CTYPE_STRUCT: 'struct',
-        CTYPE_UNION: 'union',
-        CTYPE_ENUM: 'enum',
-        CTYPE_POINTER: 'pointer',
-        CTYPE_ARRAY: 'array',
-        CTYPE_FUNCTION: 'function'}.get(ctype)
+        CTYPE_INVALID: "invalid",
+        CTYPE_VOID: "void",
+        CTYPE_BASIC_TYPE: "basic",
+        CTYPE_TYPEDEF: "typedef",
+        CTYPE_STRUCT: "struct",
+        CTYPE_UNION: "union",
+        CTYPE_ENUM: "enum",
+        CTYPE_POINTER: "pointer",
+        CTYPE_ARRAY: "array",
+        CTYPE_FUNCTION: "function",
+    }.get(ctype)
 
 
 class SourceType(object):
-    __members__ = ['type', 'base_type', 'name', 'type_qualifier',
-                   'child_list', 'is_bitfield', 'function_specifier']
+    __members__ = [
+        "type",
+        "base_type",
+        "name",
+        "type_qualifier",
+        "child_list",
+        "is_bitfield",
+        "function_specifier",
+    ]
 
     def __init__(self, scanner, stype):
         self._scanner = scanner
@@ -126,7 +140,8 @@ class SourceType(object):
         return "<%s type='%s' name='%s'>" % (
             self.__class__.__name__,
             ctype_name(self.type),
-            self.name)
+            self.name,
+        )
 
     @property
     def type(self):
@@ -162,8 +177,15 @@ class SourceType(object):
 
 
 class SourceSymbol(object):
-    __members__ = ['const_int', 'const_double', 'const_string', 'const_boolean',
-                   'ident', 'type', 'base_type']
+    __members__ = [
+        "const_int",
+        "const_double",
+        "const_string",
+        "const_boolean",
+        "ident",
+        "type",
+        "base_type",
+    ]
 
     def __init__(self, scanner, symbol):
         self._scanner = scanner
@@ -174,12 +196,13 @@ class SourceSymbol(object):
         if src:
             line = self.line
             if line:
-                src += ":'%s'" % (line, )
+                src += ":'%s'" % (line,)
         return "<%s type='%s' ident='%s' src='%s'>" % (
             self.__class__.__name__,
             symbol_type_name(self.type),
             self.ident,
-            src)
+            src,
+        )
 
     @property
     def const_int(self):
@@ -224,12 +247,10 @@ class SourceSymbol(object):
 
     @property
     def position(self):
-        return Position(self._symbol.source_filename,
-                        self._symbol.line)
+        return Position(self._symbol.source_filename, self._symbol.line)
 
 
 class SourceScanner(object):
-
     def __init__(self):
         self._scanner = CSourceScanner()
         self._filenames = []
@@ -240,10 +261,12 @@ class SourceScanner(object):
 
     def set_cpp_options(self, includes, defines, undefines, cflags=[]):
         self._cpp_options.extend(cflags)
-        for prefix, args in [('-I', [os.path.realpath(f) for f in includes]),
-                             ('-D', defines),
-                             ('-U', undefines)]:
-            for arg in (args or []):
+        for prefix, args in [
+            ("-I", [os.path.realpath(f) for f in includes]),
+            ("-D", defines),
+            ("-U", undefines),
+        ]:
+            for arg in args or []:
                 opt = prefix + arg
                 if opt not in self._cpp_options:
                     self._cpp_options.append(opt)
@@ -284,7 +307,7 @@ class SourceScanner(object):
         return self._scanner.get_errors()
 
     def dump(self):
-        print('-' * 30)
+        print("-" * 30)
         for symbol in self._scanner.get_symbols():
             print(symbol.ident, symbol.base_type.name, symbol.type)
 
@@ -294,40 +317,38 @@ class SourceScanner(object):
         if not filenames:
             return
 
-        defines = ['__GI_SCANNER__']
+        defines = ["__GI_SCANNER__"]
         undefs = []
 
         cc = CCompiler(compiler_name=self._compiler)
 
-        tmp_fd_cpp, tmp_name_cpp = tempfile.mkstemp(prefix='g-ir-cpp-',
-                                                    suffix='.c',
-                                                    dir=os.getcwd())
-        with os.fdopen(tmp_fd_cpp, 'wb') as fp_cpp:
+        tmp_fd_cpp, tmp_name_cpp = tempfile.mkstemp(
+            prefix="g-ir-cpp-", suffix=".c", dir=os.getcwd()
+        )
+        with os.fdopen(tmp_fd_cpp, "wb") as fp_cpp:
             self._write_preprocess_src(fp_cpp, defines, undefs, filenames)
 
         tmpfile_basename = os.path.basename(os.path.splitext(tmp_name_cpp)[0])
 
         # Output file name of the preprocessor, only really used on non-MSVC,
         # so we want the name to match the output file name of the MSVC preprocessor
-        tmpfile_output = tmpfile_basename + '.i'
+        tmpfile_output = tmpfile_basename + ".i"
 
-        cc.preprocess(tmp_name_cpp,
-                      tmpfile_output,
-                      self._cpp_options)
+        cc.preprocess(tmp_name_cpp, tmpfile_output, self._cpp_options)
 
-        if not have_debug_flag('save-temps'):
+        if not have_debug_flag("save-temps"):
             os.unlink(tmp_name_cpp)
         self._scanner.parse_file(tmpfile_output)
-        if not have_debug_flag('save-temps'):
+        if not have_debug_flag("save-temps"):
             os.unlink(tmpfile_output)
 
     def _write_preprocess_src(self, fp, defines, undefs, filenames):
         # Write to the temp file for feeding into the preprocessor
         for define in defines:
-            fp.write(('#ifndef %s\n' % (define, )).encode())
-            fp.write(('# define %s\n' % (define, )).encode())
-            fp.write('#endif\n'.encode())
+            fp.write(("#ifndef %s\n" % (define,)).encode())
+            fp.write(("# define %s\n" % (define,)).encode())
+            fp.write("#endif\n".encode())
         for undef in undefs:
-            fp.write(('#undef %s\n' % (undef, )).encode())
+            fp.write(("#undef %s\n" % (undef,)).encode())
         for filename in filenames:
-            fp.write(('#include <%s>\n' % (filename, )).encode())
+            fp.write(("#include <%s>\n" % (filename,)).encode())

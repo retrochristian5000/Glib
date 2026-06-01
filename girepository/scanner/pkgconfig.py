@@ -30,42 +30,46 @@ class PkgConfigError(Exception):
 
 def check_output(flags, ignore_errors, command=None):
     if command is None:
-        command = [os.environ.get('PKG_CONFIG', 'pkg-config')]
+        command = [os.environ.get("PKG_CONFIG", "pkg-config")]
     argv = command[:]
     argv.extend(flags)
     try:
-        return subprocess.check_output(argv, universal_newlines=True, stderr=subprocess.STDOUT)
+        return subprocess.check_output(
+            argv, universal_newlines=True, stderr=subprocess.STDOUT
+        )
     except subprocess.CalledProcessError as e:
-        output = e.output or ''
+        output = e.output or ""
         if ignore_errors:
             print(output)
-            return ''
-        raise PkgConfigError('pkg-config: %s\n%s' % (e, output))
+            return ""
+        raise PkgConfigError("pkg-config: %s\n%s" % (e, output))
     except OSError as e:
-        raise PkgConfigError('pkg-config: error executing command %s: %s' % (argv, e))
+        raise PkgConfigError("pkg-config: error executing command %s: %s" % (argv, e))
 
 
 def cflags(packages, msvc_syntax=False, ignore_errors=True, command=None):
-    flags = ['--msvc-syntax'] if msvc_syntax else []
-    flags.append('--cflags')
+    flags = ["--msvc-syntax"] if msvc_syntax else []
+    flags.append("--cflags")
     flags.extend(packages)
     out = check_output(flags, ignore_errors, command)
     return shlex.split(out)
 
 
-def libs_only_L(packages, static=False, msvc_syntax=False, ignore_errors=True, command=None):
-    flags = ['--msvc-syntax'] if msvc_syntax else []
+def libs_only_L(
+    packages, static=False, msvc_syntax=False, ignore_errors=True, command=None
+):
+    flags = ["--msvc-syntax"] if msvc_syntax else []
     if static:
-        flags.append('--static')
-    flags.append('--libs-only-L')
+        flags.append("--static")
+    flags.append("--libs-only-L")
     flags.extend(packages)
     out = check_output(flags, ignore_errors, command)
     return shlex.split(out)
 
 
 def libs(packages, msvc_syntax=False, ignore_errors=True, command=None):
-    flags = ['--msvc-syntax'] if msvc_syntax else []
-    flags.append('--libs')
+    flags = ["--msvc-syntax"] if msvc_syntax else []
+    flags.append("--libs")
     flags.extend(packages)
     out = check_output(flags, ignore_errors, command)
     return shlex.split(out)
@@ -73,8 +77,8 @@ def libs(packages, msvc_syntax=False, ignore_errors=True, command=None):
 
 def bindir(packages, ignore_errors=True, command=None):
     flags = []
-    flags.append('--variable')
-    flags.append('bindir')
+    flags.append("--variable")
+    flags.append("bindir")
     flags.extend(packages)
     out = check_output(flags, ignore_errors, command)
     return shlex.split(out)

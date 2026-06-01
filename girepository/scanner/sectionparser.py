@@ -67,22 +67,22 @@ def parse_sections_file(lines):
 
         match = re.match(r"<FILE>(?P<contents>.*)</FILE>", line)
         if match:
-            current_section.file = match.groupdict['contents']
+            current_section.file = match.groupdict["contents"]
             continue
 
         match = re.match(r"<TITLE>(?P<contents>.*)</TITLE>", line)
         if match:
-            current_section.title = match.groupdict['contents']
+            current_section.title = match.groupdict["contents"]
             continue
 
         match = re.match(r"<INCLUDE>(?P<contents>.*)</INCLUDE>", line)
         if match:
-            current_section.includes = match.groupdict['contents']
+            current_section.includes = match.groupdict["contents"]
             continue
 
         match = re.match(r"<SUBSECTION(?: (?P<name>.*))?>", line)
         if match:
-            current_subsection = Subsection(match.groupdict.get('name', None))
+            current_subsection = Subsection(match.groupdict.get("name", None))
             current_section.subsections.append(current_subsection)
             continue
 
@@ -99,16 +99,16 @@ def write_sections_file(f, sections_file):
     for section in sections_file.sections:
         f.write("\n<SECTION>\n")
         if section.file is not None:
-            f.write("<FILE>%s</FILE>\n" % (section.file, ))
+            f.write("<FILE>%s</FILE>\n" % (section.file,))
         if section.title is not None:
-            f.write("<TITLE>%s</TITLE>\n" % (section.title, ))
+            f.write("<TITLE>%s</TITLE>\n" % (section.title,))
         if section.includes is not None:
-            f.write("<INCLUDE>%s</INCLUDE>\n" % (section.includes, ))
+            f.write("<INCLUDE>%s</INCLUDE>\n" % (section.includes,))
 
         is_first_subsection = True
         for subsection in section.subsections:
             if subsection.name is not None:
-                f.write("<SUBSECTION %s>\n" % (subsection.name, ))
+                f.write("<SUBSECTION %s>\n" % (subsection.name,))
             elif not is_first_subsection:
                 f.write("\n<SUBSECTION>\n")
 
@@ -141,13 +141,13 @@ def generate_sections_file(transformer):
             append_symbol(general_section, node.symbol)
         elif isinstance(node, (girast.Class, girast.Interface)):
             gtype_name = node.gtype_name
-            file_name = to_underscores(gtype_name).replace('_', '-').lower()
+            file_name = to_underscores(gtype_name).replace("_", "-").lower()
             section = new_section(file_name, gtype_name)
             append_symbol(section, gtype_name)
             if node.glib_type_struct is not None:
                 append_symbol(
-                    section,
-                    node.glib_type_struct.target_giname.replace('.', ''))
+                    section, node.glib_type_struct.target_giname.replace(".", "")
+                )
 
             for meth in node.methods:
                 append_symbol(section, meth.symbol)

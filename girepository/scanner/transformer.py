@@ -30,13 +30,31 @@ from . import utils
 from .cachestore import CacheStore
 from .girparser import GIRParser
 from .sourcescanner import (
-    SourceSymbol, ctype_name, CTYPE_POINTER,
-    CTYPE_BASIC_TYPE, CTYPE_UNION, CTYPE_ARRAY, CTYPE_TYPEDEF,
-    CTYPE_VOID, CTYPE_ENUM, CTYPE_FUNCTION, CTYPE_STRUCT,
-    CSYMBOL_TYPE_FUNCTION, CSYMBOL_TYPE_FUNCTION_MACRO, CSYMBOL_TYPE_TYPEDEF, CSYMBOL_TYPE_STRUCT,
-    CSYMBOL_TYPE_ENUM, CSYMBOL_TYPE_UNION, CSYMBOL_TYPE_OBJECT,
-    CSYMBOL_TYPE_MEMBER, CSYMBOL_TYPE_ELLIPSIS, CSYMBOL_TYPE_CONST,
-    TYPE_QUALIFIER_CONST, TYPE_QUALIFIER_VOLATILE, FUNCTION_INLINE)
+    SourceSymbol,
+    ctype_name,
+    CTYPE_POINTER,
+    CTYPE_BASIC_TYPE,
+    CTYPE_UNION,
+    CTYPE_ARRAY,
+    CTYPE_TYPEDEF,
+    CTYPE_VOID,
+    CTYPE_ENUM,
+    CTYPE_FUNCTION,
+    CTYPE_STRUCT,
+    CSYMBOL_TYPE_FUNCTION,
+    CSYMBOL_TYPE_FUNCTION_MACRO,
+    CSYMBOL_TYPE_TYPEDEF,
+    CSYMBOL_TYPE_STRUCT,
+    CSYMBOL_TYPE_ENUM,
+    CSYMBOL_TYPE_UNION,
+    CSYMBOL_TYPE_OBJECT,
+    CSYMBOL_TYPE_MEMBER,
+    CSYMBOL_TYPE_ELLIPSIS,
+    CSYMBOL_TYPE_CONST,
+    TYPE_QUALIFIER_CONST,
+    TYPE_QUALIFIER_VOLATILE,
+    FUNCTION_INLINE,
+)
 
 
 class TransformerException(Exception):
@@ -46,8 +64,13 @@ class TransformerException(Exception):
 class Transformer(object):
     namespace = property(lambda self: self._namespace)
 
-    def __init__(self, namespace, accept_unprefixed=False,
-                 identifier_filter_cmd=None, symbol_filter_cmd=None):
+    def __init__(
+        self,
+        namespace,
+        accept_unprefixed=False,
+        identifier_filter_cmd=None,
+        symbol_filter_cmd=None,
+    ):
         self._cachestore = CacheStore()
         self._accept_unprefixed = accept_unprefixed
         self._namespace = namespace
@@ -79,11 +102,14 @@ class Transformer(object):
         # handle #ifdef.  But this introduces an arch-dependency in the .gir
         # file.  So far this has only come up scanning glib - in theory, other
         # modules will just depend on that.
-        if original and\
-                (isinstance(original, girast.FunctionMacro) or isinstance(node,
-                    girast.FunctionMacro)):
+        if original and (
+            isinstance(original, girast.FunctionMacro)
+            or isinstance(node, girast.FunctionMacro)
+        ):
             pass
-        elif isinstance(original, girast.Constant) and isinstance(node, girast.Constant):
+        elif isinstance(original, girast.Constant) and isinstance(
+            node, girast.Constant
+        ):
             pass
         elif original is node:
             # Ignore attempts to add the same node to the namespace. This can
@@ -95,8 +121,7 @@ class Transformer(object):
             positions = set()
             positions.update(original.file_positions)
             positions.update(node.file_positions)
-            message.fatal("Namespace conflict for '%s'" % (node.name, ),
-                          positions)
+            message.fatal("Namespace conflict for '%s'" % (node.name,), positions)
         else:
             self._namespace.append(node)
 
@@ -104,7 +129,7 @@ class Transformer(object):
         for symbol in symbols:
             # WORKAROUND
             # https://bugzilla.gnome.org/show_bug.cgi?id=550616
-            if symbol.ident in ['gst_g_error_get_type']:
+            if symbol.ident in ["gst_g_error_get_type"]:
                 continue
 
             try:
@@ -115,8 +140,11 @@ class Transformer(object):
 
             if node and node.name:
                 self._append_new_node(node)
-            if isinstance(node, girast.Compound) and node.tag_name and \
-                    node.tag_name not in self._tag_ns:
+            if (
+                isinstance(node, girast.Compound)
+                and node.tag_name
+                and node.tag_name not in self._tag_ns
+            ):
                 self._tag_ns[node.tag_name] = node
 
         # Run through the tag namespace looking for structs that have not been
@@ -143,9 +171,11 @@ class Transformer(object):
 
     def register_include_uninstalled(self, include_path):
         basename = os.path.basename(include_path)
-        if not basename.endswith('.gir'):
-            raise SystemExit("Include path '%s' must be a filename path "
-                             "ending in .gir" % (include_path, ))
+        if not basename.endswith(".gir"):
+            raise SystemExit(
+                "Include path '%s' must be a filename path "
+                "ending in .gir" % (include_path,)
+            )
         girname = basename[:-4]
         include = girast.Include.from_string(girname)
         if include in self._namespace.includes:
@@ -155,27 +185,32 @@ class Transformer(object):
 
     def lookup_giname(self, name):
         """Given a name of the form Foo or Bar.Foo,
-return the corresponding girast.Node, or None if none
-available.  Will throw KeyError however for unknown
-namespaces."""
-        if '.' not in name:
+        return the corresponding girast.Node, or None if none
+        available.  Will throw KeyError however for unknown
+        namespaces."""
+        if "." not in name:
             return self._namespace.get(name)
         else:
-            (ns, giname) = name.split('.', 1)
+            ns, giname = name.split(".", 1)
             if ns == self._namespace.name:
                 return self._namespace.get(giname)
             # Fallback to the main namespace if not a dependency and matches a prefix
-            if ns in self._namespace.identifier_prefixes and ns not in self._parsed_includes:
-                message.warn(("Deprecated reference to identifier " +
-                              "prefix %s in GIName %s") % (ns, name))
+            if (
+                ns in self._namespace.identifier_prefixes
+                and ns not in self._parsed_includes
+            ):
+                message.warn(
+                    ("Deprecated reference to identifier " + "prefix %s in GIName %s")
+                    % (ns, name)
+                )
                 return self._namespace.get(giname)
             include = self._parsed_includes[ns]
             return include.get(giname)
 
     def lookup_typenode(self, typeobj):
         """Given a Type object, if it points to a giname,
-calls lookup_giname() on the name.  Otherwise return
-None."""
+        calls lookup_giname() on the name.  Otherwise return
+        None."""
         if typeobj.target_giname:
             return self.lookup_giname(typeobj.target_giname)
         return None
@@ -184,27 +219,28 @@ None."""
 
     def _find_include(self, include):
         searchdirs = self._includepaths[:]
-        from_env = os.getenv('GI_GIR_PATH', '')
+        from_env = os.getenv("GI_GIR_PATH", "")
         if from_env:
             searchdirs.extend(from_env.split(os.pathsep))
         user_data = utils.get_user_data_dir()
         if user_data is not None:
-            searchdirs.append(os.path.join(user_data, 'gir-1.0'))
+            searchdirs.append(os.path.join(user_data, "gir-1.0"))
         for path in utils.get_system_data_dirs():
-            searchdirs.append(os.path.join(path, 'gir-1.0'))
+            searchdirs.append(os.path.join(path, "gir-1.0"))
         searchdirs.append(GIR_DIR)
-        searchdirs.append(os.path.join(DATADIR, 'gir-1.0'))
-        if os.name != 'nt':
+        searchdirs.append(os.path.join(DATADIR, "gir-1.0"))
+        if os.name != "nt":
             # For backwards compatibility, was always unconditionally added to the list.
-            searchdirs.append('/usr/share/gir-1.0')
+            searchdirs.append("/usr/share/gir-1.0")
 
-        girname = '%s-%s.gir' % (include.name, include.version)
+        girname = "%s-%s.gir" % (include.name, include.version)
         for d in searchdirs:
             path = os.path.join(d, girname)
             if os.path.exists(path):
                 return path
-        sys.stderr.write("Couldn't find include '%s' (search path: '%s')\n" %
-                         (girname, searchdirs))
+        sys.stderr.write(
+            "Couldn't find include '%s' (search path: '%s')\n" % (girname, searchdirs)
+        )
         sys.exit(1)
 
     @classmethod
@@ -242,7 +278,7 @@ None."""
 
     def _iter_namespaces(self):
         """Return an iterator over all included namespaces; the
-currently-scanned namespace is first."""
+        currently-scanned namespace is first."""
         yield self._namespace
         for ns in self._parsed_includes.values():
             yield ns
@@ -259,16 +295,20 @@ currently-scanned namespace is first."""
 
     def _split_c_string_for_namespace_matches(self, name, is_identifier=False):
         if not is_identifier and self._symbol_filter_cmd:
-            proc = subprocess.Popen(self._symbol_filter_cmd,
-                                    stdin=subprocess.PIPE,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
+            proc = subprocess.Popen(
+                self._symbol_filter_cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
             proc_name, err = proc.communicate(name.encode())
             proc_name = proc_name.strip()
             if proc.returncode:
-                raise ValueError('filter: %r exited: %d with error: %s' %
-                                 (self._symbol_filter_cmd, proc.returncode, err))
-            name = proc_name.decode('ascii')
+                raise ValueError(
+                    "filter: %r exited: %d with error: %s"
+                    % (self._symbol_filter_cmd, proc.returncode, err)
+                )
+            name = proc_name.decode("ascii")
             name = name.strip()
 
         matches = []  # Namespaces which might contain this name
@@ -282,10 +322,10 @@ currently-scanned namespace is first."""
                 prefixes = ns.symbol_prefixes
             if prefixes:
                 for prefix in prefixes:
-                    if (not is_identifier) and (not prefix.endswith('_')):
-                        prefix = prefix + '_'
+                    if (not is_identifier) and (not prefix.endswith("_")):
+                        prefix = prefix + "_"
                     if name.startswith(prefix):
-                        matches.append((ns, name[len(prefix):], len(prefix)))
+                        matches.append((ns, name[len(prefix) :], len(prefix)))
                         break
             else:
                 unprefixed_namespaces.append(ns)
@@ -301,41 +341,52 @@ currently-scanned namespace is first."""
             for ns in unprefixed_namespaces:
                 if name in ns:
                     return [(ns, name)]
-        raise ValueError("Unknown namespace for %s '%s'"
-                         % ('identifier' if is_identifier else 'symbol', name, ))
+        raise ValueError(
+            "Unknown namespace for %s '%s'"
+            % (
+                "identifier" if is_identifier else "symbol",
+                name,
+            )
+        )
 
     def split_ctype_namespaces(self, ident):
         """Given a StudlyCaps string identifier like FooBar, return a
-list of (namespace, stripped_identifier) sorted by namespace length,
-or raise ValueError.  As a special case, if the current namespace matches,
-it is always biggest (i.e. last)."""
+        list of (namespace, stripped_identifier) sorted by namespace length,
+        or raise ValueError.  As a special case, if the current namespace matches,
+        it is always biggest (i.e. last)."""
         return self._split_c_string_for_namespace_matches(ident, is_identifier=True)
 
     def split_csymbol_namespaces(self, symbol):
         """Given a C symbol like foo_bar_do_baz, return a list of
-(namespace, stripped_symbol) sorted by namespace match probablity, or
-raise ValueError."""
+        (namespace, stripped_symbol) sorted by namespace match probablity, or
+        raise ValueError."""
         return self._split_c_string_for_namespace_matches(symbol, is_identifier=False)
 
     def split_csymbol(self, symbol):
         """Given a C symbol like foo_bar_do_baz, return the most probable
-(namespace, stripped_symbol) match, or raise ValueError."""
-        matches = self._split_c_string_for_namespace_matches(symbol, is_identifier=False)
+        (namespace, stripped_symbol) match, or raise ValueError."""
+        matches = self._split_c_string_for_namespace_matches(
+            symbol, is_identifier=False
+        )
         return matches[-1]
 
     def strip_identifier(self, ident):
         if self._identifier_filter_cmd:
-            proc = subprocess.Popen(self._identifier_filter_cmd,
-                                    stdin=subprocess.PIPE,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
+            proc = subprocess.Popen(
+                self._identifier_filter_cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
             proc_ident, err = proc.communicate(ident.encode())
             if proc.returncode:
-                raise ValueError('filter: %r exited: %d with error: %s' %
-                                 (self._identifier_filter_cmd, proc.returncode, err))
-            ident = proc_ident.decode('ascii').strip()
+                raise ValueError(
+                    "filter: %r exited: %d with error: %s"
+                    % (self._identifier_filter_cmd, proc.returncode, err)
+                )
+            ident = proc_ident.decode("ascii").strip()
 
-        hidden = ident.startswith('_')
+        hidden = ident.startswith("_")
         if hidden:
             ident = ident[1:]
         try:
@@ -345,27 +396,33 @@ raise ValueError."""
         for ns, name in matches:
             if ns is self._namespace:
                 if hidden:
-                    return '_' + name
+                    return "_" + name
                 return name
-        (ns, name) = matches[-1]
+        ns, name = matches[-1]
         raise TransformerException(
-            "Skipping foreign identifier '%s' from namespace %s" % (ident, ns.name, ))
+            "Skipping foreign identifier '%s' from namespace %s"
+            % (
+                ident,
+                ns.name,
+            )
+        )
         return None
 
     def _strip_symbol(self, symbol):
         ident = symbol.ident
-        hidden = ident.startswith('_')
+        hidden = ident.startswith("_")
         if hidden:
             ident = ident[1:]
         try:
-            (ns, name) = self.split_csymbol(ident)
+            ns, name = self.split_csymbol(ident)
         except ValueError as e:
             raise TransformerException(str(e))
         if ns != self._namespace:
             raise TransformerException(
-                "Skipping foreign symbol from namespace %s" % (ns.name, ))
+                "Skipping foreign symbol from namespace %s" % (ns.name,)
+            )
         if hidden:
-            return '_' + name
+            return "_" + name
         return name
 
     def _traverse_one(self, symbol, stype=None, parent_symbol=None):
@@ -393,14 +450,14 @@ raise ValueError."""
         elif stype == CSYMBOL_TYPE_OBJECT:
             pass
         else:
-            print("transformer: unhandled symbol: '%s'" % (symbol, ))
+            print("transformer: unhandled symbol: '%s'" % (symbol,))
 
     def _enum_common_prefix(self, symbol):
         def common_prefix(a, b):
             commonparts = []
-            for aword, bword in zip(a.split('_'), b.split('_')):
+            for aword, bword in zip(a.split("_"), b.split("_")):
                 if aword != bword:
-                    return '_'.join(commonparts) + '_'
+                    return "_".join(commonparts) + "_"
                 commonparts.append(aword)
             return min(a, b)
 
@@ -413,7 +470,7 @@ raise ValueError."""
                 prefix = child.ident
             else:
                 prefix = common_prefix(prefix, child.ident)
-                if prefix == '':
+                if prefix == "":
                     return None
         return prefix
 
@@ -434,9 +491,7 @@ raise ValueError."""
                 # among them, so let's just remove the global namespace
                 # prefix.
                 name = self._strip_symbol(child)
-            members.append(girast.Member(name.lower(),
-                                      child.const_int,
-                                      child.ident))
+            members.append(girast.Member(name.lower(), child.const_int, child.ident))
         enum_name = self.strip_identifier(symbol.ident)
         if symbol.base_type.is_bitfield:
             klass = girast.Bitfield
@@ -448,7 +503,7 @@ raise ValueError."""
 
     def _create_function(self, symbol):
         # Drop functions that start with _ very early on here
-        if symbol.ident.startswith('_'):
+        if symbol.ident.startswith("_"):
             return None
         parameters = list(self._create_parameters(symbol, symbol.base_type))
         return_ = self._create_return(symbol.base_type.base_type)
@@ -461,10 +516,10 @@ raise ValueError."""
         return func
 
     def _create_function_macro(self, symbol):
-        if symbol.ident.startswith('_'):
+        if symbol.ident.startswith("_"):
             return None
 
-        if (symbol.source_filename is None or not symbol.source_filename.endswith('.h')):
+        if symbol.source_filename is None or not symbol.source_filename.endswith(".h"):
             return None
 
         parameters = list(self._create_parameters(symbol, symbol.base_type))
@@ -476,63 +531,71 @@ raise ValueError."""
     def _create_source_type(self, source_type, is_parameter=False):
         assert source_type is not None
         if source_type.type == CTYPE_VOID:
-            value = 'void'
+            value = "void"
         elif source_type.type == CTYPE_BASIC_TYPE:
             value = source_type.name
         elif source_type.type == CTYPE_TYPEDEF:
             value = source_type.name
-        elif (source_type.type == CTYPE_POINTER or
-                # Array to pointer adjustment as per 6.7.6.3.
-                # This is performed only on the outermost array,
-                # so we don't forward is_parameter.
-                (source_type.type == CTYPE_ARRAY and is_parameter)):
-            value = self._create_source_type(source_type.base_type) + '*'
+        elif (
+            source_type.type == CTYPE_POINTER
+            or
+            # Array to pointer adjustment as per 6.7.6.3.
+            # This is performed only on the outermost array,
+            # so we don't forward is_parameter.
+            (source_type.type == CTYPE_ARRAY and is_parameter)
+        ):
+            value = self._create_source_type(source_type.base_type) + "*"
         elif source_type.type == CTYPE_ARRAY:
             return self._create_source_type(source_type.base_type)
         else:
-            value = 'gpointer'
+            value = "gpointer"
         return value
 
     def _create_complete_source_type(self, source_type, is_parameter=False):
         assert source_type is not None
 
-        const = (source_type.type_qualifier & TYPE_QUALIFIER_CONST)
-        volatile = (source_type.type_qualifier & TYPE_QUALIFIER_VOLATILE)
+        const = source_type.type_qualifier & TYPE_QUALIFIER_CONST
+        volatile = source_type.type_qualifier & TYPE_QUALIFIER_VOLATILE
 
         if source_type.type == CTYPE_VOID:
-            return 'void'
-        elif source_type.type in [CTYPE_BASIC_TYPE,
-                                  CTYPE_TYPEDEF,
-                                  CTYPE_STRUCT,
-                                  CTYPE_UNION,
-                                  CTYPE_ENUM]:
+            return "void"
+        elif source_type.type in [
+            CTYPE_BASIC_TYPE,
+            CTYPE_TYPEDEF,
+            CTYPE_STRUCT,
+            CTYPE_UNION,
+            CTYPE_ENUM,
+        ]:
             value = source_type.name
             if const:
-                value = 'const ' + value
+                value = "const " + value
             if volatile:
-                value = 'volatile ' + value
+                value = "volatile " + value
             return value
-        elif (source_type.type == CTYPE_POINTER or
-                # Array to pointer adjustment as per 6.7.6.3.
-                # This is performed only on the outermost array,
-                # so we don't forward is_parameter.
-                (source_type.type == CTYPE_ARRAY and is_parameter)):
-            value = self._create_complete_source_type(source_type.base_type) + '*'
+        elif (
+            source_type.type == CTYPE_POINTER
+            or
+            # Array to pointer adjustment as per 6.7.6.3.
+            # This is performed only on the outermost array,
+            # so we don't forward is_parameter.
+            (source_type.type == CTYPE_ARRAY and is_parameter)
+        ):
+            value = self._create_complete_source_type(source_type.base_type) + "*"
             # TODO: handle pointer to function as a special case?
             if const:
-                value += ' const'
+                value += " const"
             if volatile:
-                value += ' volatile'
+                value += " volatile"
             return value
         elif source_type.type == CTYPE_ARRAY:
             return self._create_complete_source_type(source_type.base_type)
         else:
             if const:
-                value = 'gconstpointer'
+                value = "gconstpointer"
             else:
-                value = 'gpointer'
+                value = "gpointer"
             if volatile:
-                value = 'volatile ' + value
+                value = "volatile " + value
             return value
 
     def _create_parameters(self, symbol, base_type):
@@ -543,14 +606,14 @@ raise ValueError."""
         # Synthesize a named union so that it can be referenced.
         parent_ident = parent_symbol.ident
         # FIXME: Should split_ctype_namespaces handle the hidden case?
-        hidden = parent_ident.startswith('_')
+        hidden = parent_ident.startswith("_")
         if hidden:
             parent_ident = parent_ident[1:]
         matches = self.split_ctype_namespaces(parent_ident)
-        (namespace, parent_name) = matches[-1]
+        namespace, parent_name = matches[-1]
         assert namespace and parent_name
         if hidden:
-            parent_name = '_' + parent_name
+            parent_name = "_" + parent_name
         fake_union = girast.Union("%s__%s__union" % (parent_name, symbol.ident))
         # _parse_fields accesses <type>.base_type.child_list, so we have to
         # pass symbol.base_type even though that refers to the array, not the
@@ -558,13 +621,16 @@ raise ValueError."""
         self._parse_fields(symbol.base_type, fake_union)
         self._append_new_node(fake_union)
         fake_type = girast.Type(
-            target_giname="%s.%s" % (namespace.name, fake_union.name))
+            target_giname="%s.%s" % (namespace.name, fake_union.name)
+        )
         return fake_type
 
     def _create_member(self, symbol, parent_symbol=None):
         source_type = symbol.base_type
-        if (source_type.type == CTYPE_POINTER
-        and symbol.base_type.base_type.type == CTYPE_FUNCTION):
+        if (
+            source_type.type == CTYPE_POINTER
+            and symbol.base_type.base_type.type == CTYPE_FUNCTION
+        ):
             node = self._create_callback(symbol, member=True)
         elif source_type.type == CTYPE_STRUCT and source_type.name is None:
             node = self._create_member_compound(girast.Record, symbol)
@@ -595,8 +661,9 @@ raise ValueError."""
                 else:
                     ctype = self._create_source_type(source_type)
                     complete_ctype = self._create_complete_source_type(source_type)
-                    element_type = self.create_type_from_ctype_string(ctype,
-                                                                      complete_ctype=complete_ctype)
+                    element_type = self.create_type_from_ctype_string(
+                        ctype, complete_ctype=complete_ctype
+                    )
                 ftype = girast.Array(None, element_type)
                 ftype.zeroterminated = False
                 ftype.size = flattened_size
@@ -604,9 +671,9 @@ raise ValueError."""
                 ftype = self._create_type_from_base(symbol.base_type)
             # girast.Fields are assumed to be read-write
             # (except for Objects, see also glibtransformer.py)
-            node = girast.Field(symbol.ident, ftype,
-                             readable=True, writable=True,
-                             bits=symbol.const_int)
+            node = girast.Field(
+                symbol.ident, ftype, readable=True, writable=True, bits=symbol.const_int
+            )
             if symbol.private:
                 node.readable = False
                 node.writable = False
@@ -615,34 +682,34 @@ raise ValueError."""
 
     def _create_typedef(self, symbol):
         ctype = symbol.base_type.type
-        if (ctype == CTYPE_POINTER and symbol.base_type.base_type.type == CTYPE_FUNCTION):
+        if ctype == CTYPE_POINTER and symbol.base_type.base_type.type == CTYPE_FUNCTION:
             node = self._create_typedef_callback(symbol)
-        elif (ctype == CTYPE_FUNCTION):
+        elif ctype == CTYPE_FUNCTION:
             node = self._create_typedef_callback(symbol)
-        elif (ctype == CTYPE_POINTER and symbol.base_type.base_type.type == CTYPE_STRUCT):
-            node = self._create_typedef_compound(girast.Record, symbol, disguised=True, pointer=True)
+        elif ctype == CTYPE_POINTER and symbol.base_type.base_type.type == CTYPE_STRUCT:
+            node = self._create_typedef_compound(
+                girast.Record, symbol, disguised=True, pointer=True
+            )
         elif ctype == CTYPE_STRUCT:
             node = self._create_typedef_compound(girast.Record, symbol)
         elif ctype == CTYPE_UNION:
             node = self._create_typedef_compound(girast.Union, symbol)
         elif ctype == CTYPE_ENUM:
             return self._create_enum(symbol)
-        elif ctype in (CTYPE_TYPEDEF,
-                       CTYPE_POINTER,
-                       CTYPE_BASIC_TYPE,
-                       CTYPE_VOID):
+        elif ctype in (CTYPE_TYPEDEF, CTYPE_POINTER, CTYPE_BASIC_TYPE, CTYPE_VOID):
             name = self.strip_identifier(symbol.ident)
             target = self._create_type_from_base(symbol.base_type)
             if name in girast.type_names:
                 return None
             # https://bugzilla.gnome.org/show_bug.cgi?id=755882
-            if name.endswith('_autoptr'):
+            if name.endswith("_autoptr"):
                 return None
             node = girast.Alias(name, target, ctype=symbol.ident)
             node.add_symbol_reference(symbol)
         else:
             raise NotImplementedError(
-                "symbol '%s' of type %s" % (symbol.ident, ctype_name(ctype)))
+                "symbol '%s' of type %s" % (symbol.ident, ctype_name(ctype))
+            )
         return node
 
     def _canonicalize_ctype(self, ctype):
@@ -657,7 +724,7 @@ raise ValueError."""
         if firstpass:
             return firstpass.target_fundamental
 
-        if not ctype.endswith('*'):
+        if not ctype.endswith("*"):
             return ctype
 
         # We have a pointer type.
@@ -666,81 +733,130 @@ raise ValueError."""
         canonical_base = self._canonicalize_ctype(base)
 
         # Append the pointer again
-        canonical = canonical_base + '*'
+        canonical = canonical_base + "*"
 
         return canonical
 
     def _create_type_from_base(self, source_type, is_parameter=False, is_return=False):
         ctype = self._create_source_type(source_type, is_parameter=is_parameter)
-        complete_ctype = self._create_complete_source_type(source_type, is_parameter=is_parameter)
-        const = ((source_type.type == CTYPE_POINTER) and
-                 (source_type.base_type.type_qualifier & TYPE_QUALIFIER_CONST))
-        return self.create_type_from_ctype_string(ctype, is_const=const,
-                                                  is_parameter=is_parameter, is_return=is_return,
-                                                  complete_ctype=complete_ctype)
+        complete_ctype = self._create_complete_source_type(
+            source_type, is_parameter=is_parameter
+        )
+        const = (source_type.type == CTYPE_POINTER) and (
+            source_type.base_type.type_qualifier & TYPE_QUALIFIER_CONST
+        )
+        return self.create_type_from_ctype_string(
+            ctype,
+            is_const=const,
+            is_parameter=is_parameter,
+            is_return=is_return,
+            complete_ctype=complete_ctype,
+        )
 
-    def _create_bare_container_type(self, base, ctype=None,
-                                    is_const=False, complete_ctype=None):
-        if base in ('GList', 'GSList', 'GLib.List', 'GLib.SList'):
-            if base in ('GList', 'GSList'):
-                name = 'GLib.' + base[1:]
+    def _create_bare_container_type(
+        self, base, ctype=None, is_const=False, complete_ctype=None
+    ):
+        if base in ("GList", "GSList", "GLib.List", "GLib.SList"):
+            if base in ("GList", "GSList"):
+                name = "GLib." + base[1:]
             else:
                 name = base
-            return girast.List(name, girast.TYPE_ANY, ctype=ctype,
-                        is_const=is_const, complete_ctype=complete_ctype)
-        elif base in ('GByteArray', 'GLib.ByteArray', 'GObject.ByteArray'):
-            return girast.Array('GLib.ByteArray', girast.TYPE_UINT8, ctype=ctype,
-                         is_const=is_const, complete_ctype=complete_ctype)
-        elif base in ('GArray', 'GPtrArray',
-                      'GLib.Array', 'GLib.PtrArray',
-                      'GObject.Array', 'GObject.PtrArray'):
-            if '.' in base:
-                name = 'GLib.' + base.split('.', 1)[1]
+            return girast.List(
+                name,
+                girast.TYPE_ANY,
+                ctype=ctype,
+                is_const=is_const,
+                complete_ctype=complete_ctype,
+            )
+        elif base in ("GByteArray", "GLib.ByteArray", "GObject.ByteArray"):
+            return girast.Array(
+                "GLib.ByteArray",
+                girast.TYPE_UINT8,
+                ctype=ctype,
+                is_const=is_const,
+                complete_ctype=complete_ctype,
+            )
+        elif base in (
+            "GArray",
+            "GPtrArray",
+            "GLib.Array",
+            "GLib.PtrArray",
+            "GObject.Array",
+            "GObject.PtrArray",
+        ):
+            if "." in base:
+                name = "GLib." + base.split(".", 1)[1]
             else:
-                name = 'GLib.' + base[1:]
-            return girast.Array(name, girast.TYPE_ANY, ctype=ctype,
-                         is_const=is_const, complete_ctype=complete_ctype)
-        elif base in ('GHashTable', 'GLib.HashTable', 'GObject.HashTable'):
-            return girast.Map(girast.TYPE_ANY, girast.TYPE_ANY, ctype=ctype, is_const=is_const,
-                           complete_ctype=complete_ctype)
+                name = "GLib." + base[1:]
+            return girast.Array(
+                name,
+                girast.TYPE_ANY,
+                ctype=ctype,
+                is_const=is_const,
+                complete_ctype=complete_ctype,
+            )
+        elif base in ("GHashTable", "GLib.HashTable", "GObject.HashTable"):
+            return girast.Map(
+                girast.TYPE_ANY,
+                girast.TYPE_ANY,
+                ctype=ctype,
+                is_const=is_const,
+                complete_ctype=complete_ctype,
+            )
         return None
 
-    def create_type_from_ctype_string(self, ctype, is_const=False,
-                                      is_parameter=False, is_return=False,
-                                      complete_ctype=None):
+    def create_type_from_ctype_string(
+        self,
+        ctype,
+        is_const=False,
+        is_parameter=False,
+        is_return=False,
+        complete_ctype=None,
+    ):
         canonical = self._canonicalize_ctype(ctype)
-        base = canonical.replace('*', '')
+        base = canonical.replace("*", "")
 
         # While gboolean and _Bool are distinct types, they used to be treated
         # by scanner as exactly the same one. In general this is incorrect
         # because of different ABI, but this usually works fine,
         # so for backward compatibility lets continue for now:
         # https://gitlab.gnome.org/GNOME/gobject-introspection/merge_requests/24#note_92792
-        if canonical in ('_Bool', 'bool'):
-            canonical = 'gboolean'
+        if canonical in ("_Bool", "bool"):
+            canonical = "gboolean"
             base = canonical
 
         # Special default: char ** -> girast.Array, same for GStrv
-        if (is_return and canonical == 'utf8*') or base == 'GStrv':
+        if (is_return and canonical == "utf8*") or base == "GStrv":
             bare_utf8 = girast.TYPE_STRING.clone()
             bare_utf8.ctype = None
-            return girast.Array(None, bare_utf8, ctype=ctype,
-                             is_const=is_const, complete_ctype=complete_ctype)
+            return girast.Array(
+                None,
+                bare_utf8,
+                ctype=ctype,
+                is_const=is_const,
+                complete_ctype=complete_ctype,
+            )
 
         fundamental = girast.type_names.get(base)
         if fundamental is not None:
-            return girast.Type(target_fundamental=fundamental.target_fundamental,
-                        ctype=ctype,
-                        is_const=is_const, complete_ctype=complete_ctype)
-        container = self._create_bare_container_type(base, ctype=ctype, is_const=is_const,
-                                                     complete_ctype=complete_ctype)
+            return girast.Type(
+                target_fundamental=fundamental.target_fundamental,
+                ctype=ctype,
+                is_const=is_const,
+                complete_ctype=complete_ctype,
+            )
+        container = self._create_bare_container_type(
+            base, ctype=ctype, is_const=is_const, complete_ctype=complete_ctype
+        )
         if container:
             return container
-        return girast.Type(ctype=ctype, is_const=is_const, complete_ctype=complete_ctype)
+        return girast.Type(
+            ctype=ctype, is_const=is_const, complete_ctype=complete_ctype
+        )
 
     def _create_parameter(self, parent_symbol, index, symbol):
         if symbol.type == CSYMBOL_TYPE_ELLIPSIS:
-            return girast.Parameter('...', girast.Varargs())
+            return girast.Parameter("...", girast.Varargs())
         else:
             if symbol.base_type:
                 ptype = self._create_type_from_base(symbol.base_type, is_parameter=True)
@@ -749,8 +865,10 @@ raise ValueError."""
 
             if symbol.ident is None:
                 if symbol.base_type and symbol.base_type.type != CTYPE_VOID:
-                    message.warn_symbol(parent_symbol, "missing parameter name; undocumentable")
-                ident = 'arg%d' % (index, )
+                    message.warn_symbol(
+                        parent_symbol, "missing parameter name; undocumentable"
+                    )
+                ident = "arg%d" % (index,)
             else:
                 ident = symbol.ident
 
@@ -761,12 +879,12 @@ raise ValueError."""
         return girast.Return(typeval)
 
     def _create_const(self, symbol):
-        if symbol.ident.startswith('_'):
+        if symbol.ident.startswith("_"):
             return None
 
         # Don't create constants for non-public things
         # http://bugzilla.gnome.org/show_bug.cgi?id=572790
-        if (symbol.source_filename is None or not symbol.source_filename.endswith('.h')):
+        if symbol.source_filename is None or not symbol.source_filename.endswith(".h"):
             return None
         name = self._strip_symbol(symbol)
         if symbol.const_string is not None:
@@ -785,13 +903,13 @@ raise ValueError."""
                 if isinstance(target, girast.Type):
                     unaliased = target
             if unaliased == girast.TYPE_UINT64:
-                value = str(symbol.const_int % 2 ** 64)
+                value = str(symbol.const_int % 2**64)
             elif unaliased == girast.TYPE_UINT32:
-                value = str(symbol.const_int % 2 ** 32)
+                value = str(symbol.const_int % 2**32)
             elif unaliased == girast.TYPE_UINT16:
-                value = str(symbol.const_int % 2 ** 16)
+                value = str(symbol.const_int % 2**16)
             elif unaliased == girast.TYPE_UINT8:
-                value = str(symbol.const_int % 2 ** 16)
+                value = str(symbol.const_int % 2**16)
             else:
                 value = str(symbol.const_int)
         elif symbol.const_boolean is not None:
@@ -799,16 +917,17 @@ raise ValueError."""
             value = "true" if symbol.const_boolean else "false"
         elif symbol.const_double is not None:
             typeval = girast.TYPE_DOUBLE
-            value = '%f' % (symbol.const_double, )
+            value = "%f" % (symbol.const_double,)
         else:
             raise AssertionError()
 
-        const = girast.Constant(name, typeval, value,
-                             symbol.ident)
+        const = girast.Constant(name, typeval, value, symbol.ident)
         const.add_symbol_reference(symbol)
         return const
 
-    def _create_typedef_compound(self, compound_class, symbol, disguised=False, pointer=False):
+    def _create_typedef_compound(
+        self, compound_class, symbol, disguised=False, pointer=False
+    ):
         name = self.strip_identifier(symbol.ident)
         assert symbol.base_type
         if symbol.base_type.name:
@@ -847,7 +966,13 @@ raise ValueError."""
             # Structs with a typedef name are promoted into the main namespace
             # by it being returned to the "parse" function and are also added to
             # the tag namespace if it has a tag_name set.
-            compound = compound_class(name, symbol.ident, disguised=disguised, pointer=pointer, tag_name=tag_name)
+            compound = compound_class(
+                name,
+                symbol.ident,
+                disguised=disguised,
+                pointer=pointer,
+                tag_name=tag_name,
+            )
             if tag_name:
                 # Force the struct as opaque for now since we do not yet know
                 # if it has fields that will be parsed.
@@ -907,15 +1032,16 @@ raise ValueError."""
             if isinstance(child_node, girast.Field):
                 field = child_node
             else:
-                field = girast.Field(child.ident, None, True, False,
-                              anonymous_node=child_node)
+                field = girast.Field(
+                    child.ident, None, True, False, anonymous_node=child_node
+                )
             compound.fields.append(field)
 
     def _create_callback(self, symbol, member=False):
-        if (symbol.base_type.type == CTYPE_FUNCTION):  # function
+        if symbol.base_type.type == CTYPE_FUNCTION:  # function
             paramtype = symbol.base_type
             retvaltype = symbol.base_type.base_type
-        elif (symbol.base_type.type == CTYPE_POINTER):  # function pointer
+        elif symbol.base_type.type == CTYPE_POINTER:  # function pointer
             paramtype = symbol.base_type.base_type
             retvaltype = symbol.base_type.base_type.base_type
         parameters = list(self._create_parameters(symbol, paramtype))
@@ -923,28 +1049,30 @@ raise ValueError."""
 
         # Mark the 'user_data' arguments
         for i, param in enumerate(parameters):
-            if (param.type.target_fundamental == 'gpointer' and param.argname == 'user_data'):
+            if (
+                param.type.target_fundamental == "gpointer"
+                and param.argname == "user_data"
+            ):
                 param.closure_name = param.argname
 
         if member:
             name = symbol.ident
-        elif symbol.ident.find('_') > 0:
+        elif symbol.ident.find("_") > 0:
             name = self._strip_symbol(symbol)
         else:
             name = self.strip_identifier(symbol.ident)
-        callback = girast.Callback(name, retval, parameters, False,
-                                ctype=symbol.ident)
+        callback = girast.Callback(name, retval, parameters, False, ctype=symbol.ident)
         callback.add_symbol_reference(symbol)
 
         return callback
 
     def create_type_from_user_string(self, typestr):
         """Parse a C type string (as might be given from an
-        annotation) and resolve it.  For compatibility, we can consume
-both GI type string (utf8, Foo.Bar) style, as well as C (char *, FooBar) style.
+                annotation) and resolve it.  For compatibility, we can consume
+        both GI type string (utf8, Foo.Bar) style, as well as C (char *, FooBar) style.
 
-Note that type resolution may not succeed."""
-        if '.' in typestr:
+        Note that type resolution may not succeed."""
+        if "." in typestr:
             container = self._create_bare_container_type(typestr)
             if container:
                 typeval = container
@@ -968,23 +1096,25 @@ Note that type resolution may not succeed."""
         for namespace in self._parsed_includes.values():
             target = namespace.get_by_ctype(pointer_stripped)
             if target:
-                typeval.target_giname = '%s.%s' % (namespace.name, target.name)
+                typeval.target_giname = "%s.%s" % (namespace.name, target.name)
                 return True
         return False
 
     def _resolve_type_from_ctype(self, typeval):
         assert typeval.ctype is not None
-        pointer_stripped = typeval.ctype.replace('*', '')
+        pointer_stripped = typeval.ctype.replace("*", "")
         try:
             matches = self.split_ctype_namespaces(pointer_stripped)
         except ValueError:
-            return self._resolve_type_from_ctype_all_namespaces(typeval, pointer_stripped)
+            return self._resolve_type_from_ctype_all_namespaces(
+                typeval, pointer_stripped
+            )
         for namespace, name in matches:
             target = namespace.get(name)
             if not target:
                 target = namespace.get_by_ctype(pointer_stripped)
             if target:
-                typeval.target_giname = '%s.%s' % (namespace.name, target.name)
+                typeval.target_giname = "%s.%s" % (namespace.name, target.name)
                 return True
         return False
 
@@ -993,7 +1123,7 @@ Note that type resolution may not succeed."""
         for ns in self._iter_namespaces():
             node = ns.type_names.get(typeval.gtype_name, None)
             if node is not None:
-                typeval.target_giname = '%s.%s' % (ns.name, node.name)
+                typeval.target_giname = "%s.%s" % (ns.name, node.name)
                 return True
         return False
 

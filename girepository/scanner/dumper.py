@@ -84,7 +84,6 @@ class LinkerError(Exception):
 
 
 class DumpCompiler(object):
-
     _compiler = None
 
     def __init__(self, options, get_type_functions, error_quark_functions):
@@ -95,8 +94,8 @@ class DumpCompiler(object):
         # Acquire the compiler (and linker) commands via the CCompiler class in ccompiler.py
         self._compiler = CCompiler()
 
-        self._uninst_srcdir = os.environ.get('UNINSTALLED_INTROSPECTION_SRCDIR')
-        self._packages = ['gio-2.0', 'gmodule-2.0']
+        self._uninst_srcdir = os.environ.get("UNINSTALLED_INTROSPECTION_SRCDIR")
+        self._packages = ["gio-2.0", "gmodule-2.0"]
         self._packages.extend(options.packages)
 
     # Public API
@@ -104,28 +103,30 @@ class DumpCompiler(object):
     def run(self):
         # We have to use the current directory to work around Unix
         # sysadmins who mount /tmp noexec
-        tmpdir = tempfile.mkdtemp('', 'tmp-introspect', dir=os.getcwd())
-        os.mkdir(os.path.join(tmpdir, '.libs'))
+        tmpdir = tempfile.mkdtemp("", "tmp-introspect", dir=os.getcwd())
+        os.mkdir(os.path.join(tmpdir, ".libs"))
 
         tpl_args = {}
         if self._uninst_srcdir is not None:
-            gdump_path = os.path.join(self._uninst_srcdir, 'girepository', 'scanner', 'gdump.c')
+            gdump_path = os.path.join(
+                self._uninst_srcdir, "girepository", "scanner", "gdump.c"
+            )
         else:
             try:
                 gdump_path = GDUMP_PATH
             except NameError:
-                gdump_path = os.path.join(os.path.join(DATADIR),
-                                          'gobject-introspection-1.0',
-                                          'gdump.c')
+                gdump_path = os.path.join(
+                    os.path.join(DATADIR), "gobject-introspection-1.0", "gdump.c"
+                )
         if not os.path.isfile(gdump_path):
             raise SystemExit(f"Couldn't find {gdump_path}")
-        with open(gdump_path, encoding='utf-8') as gdump_file:
+        with open(gdump_path, encoding="utf-8") as gdump_file:
             gdump_contents = gdump_file.read()
-        tpl_args['gdump_include'] = gdump_contents
-        tpl_args['init_sections'] = "\n".join(self._options.init_sections)
+        tpl_args["gdump_include"] = gdump_contents
+        tpl_args["init_sections"] = "\n".join(self._options.init_sections)
 
-        c_path = self._generate_tempfile(tmpdir, '.c')
-        with open(c_path, 'w', encoding='utf-8') as f:
+        c_path = self._generate_tempfile(tmpdir, ".c")
+        with open(c_path, "w", encoding="utf-8") as f:
             f.write(_PROGRAM_TEMPLATE % tpl_args)
 
             # We need to reference our get_type and error_quark functions
@@ -159,41 +160,44 @@ class DumpCompiler(object):
         if self._compiler.compiler.exe_extension:
             ext = self._compiler.compiler.exe_extension
         else:
-            ext = ''
+            ext = ""
 
         bin_path = self._generate_tempfile(tmpdir, ext)
 
         try:
             introspection_obj = self._compile(c_path)
         except CompilerError as e:
-            if not utils.have_debug_flag('save-temps'):
+            if not utils.have_debug_flag("save-temps"):
                 utils.rmtree(tmpdir)
-            raise SystemExit('compilation of temporary binary failed:' + str(e))
+            raise SystemExit("compilation of temporary binary failed:" + str(e))
 
         try:
             self._link(bin_path, introspection_obj)
         except LinkerError as e:
-            if not utils.have_debug_flag('save-temps'):
+            if not utils.have_debug_flag("save-temps"):
                 utils.rmtree(tmpdir)
-            raise SystemExit('linking of temporary binary failed: ' + str(e))
+            raise SystemExit("linking of temporary binary failed: " + str(e))
 
         return IntrospectionBinary([bin_path], tmpdir)
 
     # Private API
 
-    def _generate_tempfile(self, tmpdir, suffix=''):
-        tmpl = '%s-%s%s' % (self._options.namespace_name,
-                            self._options.namespace_version, suffix)
+    def _generate_tempfile(self, tmpdir, suffix=""):
+        tmpl = "%s-%s%s" % (
+            self._options.namespace_name,
+            self._options.namespace_version,
+            suffix,
+        )
         return os.path.join(tmpdir, tmpl)
 
     def _compile(self, *sources):
-        cflags = pkgconfig.cflags(self._packages,
-                                  msvc_syntax=self._compiler.check_is_msvc())
+        cflags = pkgconfig.cflags(
+            self._packages, msvc_syntax=self._compiler.check_is_msvc()
+        )
         cflags.extend(self._options.cflags)
-        return self._compiler.compile(cflags,
-                                      self._options.cpp_includes,
-                                      sources,
-                                      self._options.init_sections)
+        return self._compiler.compile(
+            cflags, self._options.cpp_includes, sources, self._options.init_sections
+        )
 
     def _link(self, output, sources):
         args = []
@@ -201,33 +205,33 @@ class DumpCompiler(object):
         if libtool:
             # Note: MSVC Builds do not use libtool!
             args.extend(libtool)
-            args.append('--mode=link')
-            args.append('--tag=CC')
+            args.append("--mode=link")
+            args.append("--tag=CC")
             if self._options.quiet:
-                args.append('--silent')
+                args.append("--silent")
 
         args.extend(self._compiler.linker_cmd)
 
         # We can use -o for the Microsoft compiler/linker,
         # but it is considered deprecated usage
         if self._compiler.check_is_msvc():
-            args.extend(['-out:' + output])
+            args.extend(["-out:" + output])
         else:
-            args.extend(['-o', output])
+            args.extend(["-o", output])
             if libtool:
-                if utils.host_os() == 'nt':
-                    args.append('-Wl,--export-all-symbols')
+                if utils.host_os() == "nt":
+                    args.append("-Wl,--export-all-symbols")
                 else:
-                    args.append('-export-dynamic')
+                    args.append("-export-dynamic")
 
         if not self._compiler.check_is_msvc():
             # These envvars are not used for MSVC Builds!
             # MSVC Builds use the INCLUDE, LIB envvars,
             # which are automatically picked up during
             # compilation and linking
-            for cppflag in shlex.split(os.environ.get('CPPFLAGS', '')):
+            for cppflag in shlex.split(os.environ.get("CPPFLAGS", "")):
                 args.append(cppflag)
-            for cflag in shlex.split(os.environ.get('CFLAGS', '')):
+            for cflag in shlex.split(os.environ.get("CFLAGS", "")):
                 args.append(cflag)
 
         # Make sure to list the library to be introspected first since it's
@@ -235,62 +239,67 @@ class DumpCompiler(object):
         # priority (or we might run with installed library that is older)
         for source in sources:
             if not os.path.exists(source):
-                raise CompilerError(
-                    "Could not find object file: %s" % (source, ))
+                raise CompilerError("Could not find object file: %s" % (source,))
 
         args.extend(sources)
 
-        pkg_config_libs = pkgconfig.libs(self._packages,
-                                         msvc_syntax=self._compiler.check_is_msvc())
+        pkg_config_libs = pkgconfig.libs(
+            self._packages, msvc_syntax=self._compiler.check_is_msvc()
+        )
 
         if not self._options.external_library:
-            self._compiler.get_internal_link_flags(args,
-                                                   libtool,
-                                                   self._options.libraries,
-                                                   self._options.extra_libraries,
-                                                   self._options.library_paths,
-                                                   self._options.lib_dirs_envvar)
+            self._compiler.get_internal_link_flags(
+                args,
+                libtool,
+                self._options.libraries,
+                self._options.extra_libraries,
+                self._options.library_paths,
+                self._options.lib_dirs_envvar,
+            )
             args.extend(pkg_config_libs)
 
         else:
             args.extend(pkg_config_libs)
             self._compiler.get_external_link_flags(args, self._options.libraries)
 
-        if sys.platform in ('darwin', 'linux'):
+        if sys.platform in ("darwin", "linux"):
             # If the libraries' ID are of the form (@rpath/libfoo.dylib),
             # then nothing previously can have added the needed rpaths
             # For the linux case, covers when uninstalled libraries
             # supplied transitive requirements
-            rpath_entries_to_add = [lib.replace('-L/', '-Wl,-rpath,/') for lib in pkg_config_libs if lib.startswith('-L/')]
+            rpath_entries_to_add = [
+                lib.replace("-L/", "-Wl,-rpath,/")
+                for lib in pkg_config_libs
+                if lib.startswith("-L/")
+            ]
             args.extend(rpath_entries_to_add)
 
         if not self._compiler.check_is_msvc():
-            for ldflag in shlex.split(os.environ.get('LDFLAGS', '')):
-                if ldflag != '-Wl,--as-needed':
+            for ldflag in shlex.split(os.environ.get("LDFLAGS", "")):
+                if ldflag != "-Wl,--as-needed":
                     args.append(ldflag)
 
         dll_dirs = utils.dll_dirs()
         dll_dirs.add_dll_dirs(self._packages)
 
         if not self._options.quiet:
-            print("g-ir-scanner: link: %s" % (
-                subprocess.list2cmdline(args), ))
+            print("g-ir-scanner: link: %s" % (subprocess.list2cmdline(args),))
             sys.stdout.flush()
 
-        msys = os.environ.get('MSYSTEM', None)
+        msys = os.environ.get("MSYSTEM", None)
         if msys and not self._compiler.check_is_msvc():
-            shell = os.environ.get('SHELL', 'sh.exe')
+            shell = os.environ.get("SHELL", "sh.exe")
             # Create a temporary script file that
             # runs the command we want
             tf, tf_name = tempfile.mkstemp()
-            with os.fdopen(tf, 'wb') as f:
-                shellcontents = ' '.join([x.replace('\\', '/') for x in args])
-                fcontents = '#!/bin/sh\nunset PWD\n{}\n'.format(shellcontents)
+            with os.fdopen(tf, "wb") as f:
+                shellcontents = " ".join([x.replace("\\", "/") for x in args])
+                fcontents = "#!/bin/sh\nunset PWD\n{}\n".format(shellcontents)
                 if not isinstance(fcontents, bytes):
-                    fcontents = fcontents.encode('utf-8')
+                    fcontents = fcontents.encode("utf-8")
                 f.write(fcontents)
             shell = utils.which(shell)
-            args = [shell, tf_name.replace('\\', '/')]
+            args = [shell, tf_name.replace("\\", "/")]
         try:
             subprocess.check_call(args)
         except subprocess.CalledProcessError as e:
@@ -301,7 +310,6 @@ class DumpCompiler(object):
             dll_dirs.cleanup_dll_dirs()
 
 
-def compile_introspection_binary(options, get_type_functions,
-                                 error_quark_functions):
+def compile_introspection_binary(options, get_type_functions, error_quark_functions):
     dc = DumpCompiler(options, get_type_functions, error_quark_functions)
     return dc.run()

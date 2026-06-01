@@ -42,13 +42,13 @@ def _calc_attrs_length(attributes, indent, self_indent):
 
 def collect_attributes(tag_name, attributes, self_indent, self_indent_char, indent=-1):
     if not attributes:
-        return ''
+        return ""
     if _calc_attrs_length(attributes, indent, self_indent) > 79:
         indent_len = self_indent + len(tag_name) + 1
     else:
         indent_len = 0
     first = True
-    attr_value = ''
+    attr_value = ""
     for attr, value in attributes:
         # FIXME: actually, if we have attributes with None as value this
         # should be considered a bug and raise an error. We are just
@@ -57,34 +57,32 @@ def collect_attributes(tag_name, attributes, self_indent, self_indent_char, inde
         if value is None:
             continue
         if indent_len and not first:
-            attr_value += '\n%s' % (self_indent_char * indent_len)
-        attr_value += ' %s=%s' % (attr, quoteattr(value))
+            attr_value += "\n%s" % (self_indent_char * indent_len)
+        attr_value += " %s=%s" % (attr, quoteattr(value))
         if first:
             first = False
     return attr_value
 
 
-def build_xml_tag(tag_name, attributes=None, data=None, self_indent=0,
-                  self_indent_char=' '):
+def build_xml_tag(
+    tag_name, attributes=None, data=None, self_indent=0, self_indent_char=" "
+):
     if attributes is None:
         attributes = []
-    prefix = '<%s' % (tag_name, )
+    prefix = "<%s" % (tag_name,)
     if data is not None:
         if isinstance(data, bytes):
-            data = data.decode('UTF-8')
-        suffix = '>%s</%s>' % (escape(data), tag_name)
+            data = data.decode("UTF-8")
+        suffix = ">%s</%s>" % (escape(data), tag_name)
     else:
-        suffix = '/>'
+        suffix = "/>"
     attrs = collect_attributes(
-        tag_name, attributes,
-        self_indent,
-        self_indent_char,
-        len(prefix) + len(suffix))
+        tag_name, attributes, self_indent, self_indent_char, len(prefix) + len(suffix)
+    )
     return prefix + attrs + suffix
 
 
 class XMLWriter(object):
-
     def __init__(self):
         # Build up the XML buffer as unicode strings. When writing to disk,
         # we can assume the lack of a Byte Order Mark (BOM) and lack
@@ -102,22 +100,23 @@ class XMLWriter(object):
     def _open_tag(self, tag_name, attributes=None):
         if attributes is None:
             attributes = []
-        attrs = collect_attributes(tag_name, attributes,
-                                   self._indent, self._indent_char, len(tag_name) + 2)
-        self.write_line('<%s%s>' % (tag_name, attrs))
+        attrs = collect_attributes(
+            tag_name, attributes, self._indent, self._indent_char, len(tag_name) + 2
+        )
+        self.write_line("<%s%s>" % (tag_name, attrs))
 
     def _close_tag(self, tag_name):
-        self.write_line('</%s>' % (tag_name, ))
+        self.write_line("</%s>" % (tag_name,))
 
     # Public API
 
     def enable_whitespace(self):
-        self._indent_char = ' '
-        self._newline_char = '\n'
+        self._indent_char = " "
+        self._newline_char = "\n"
 
     def disable_whitespace(self):
-        self._indent_char = ''
-        self._newline_char = ''
+        self._indent_char = ""
+        self._newline_char = ""
 
     def get_xml(self):
         """Returns a unicode string containing the XML."""
@@ -125,27 +124,28 @@ class XMLWriter(object):
 
     def get_encoded_xml(self):
         """Returns a utf-8 encoded bytes object containing the XML."""
-        return self._data.getvalue().encode('utf-8')
+        return self._data.getvalue().encode("utf-8")
 
-    def write_line(self, line='', indent=True, do_escape=False):
+    def write_line(self, line="", indent=True, do_escape=False):
         if isinstance(line, bytes):
-            line = line.decode('utf-8')
+            line = line.decode("utf-8")
         assert isinstance(line, str)
         if do_escape:
             line = escape(line)
         if indent:
-            self._data.write('%s%s%s' % (self._indent_char * self._indent,
-                                         line,
-                                         self._newline_char))
+            self._data.write(
+                "%s%s%s" % (self._indent_char * self._indent, line, self._newline_char)
+            )
         else:
-            self._data.write('%s%s' % (line, self._newline_char))
+            self._data.write("%s%s" % (line, self._newline_char))
 
     def write_comment(self, text):
-        self.write_line('<!-- %s -->' % (text, ))
+        self.write_line("<!-- %s -->" % (text,))
 
     def write_tag(self, tag_name, attributes, data=None):
-        self.write_line(build_xml_tag(tag_name, attributes, data,
-                                      self._indent, self._indent_char))
+        self.write_line(
+            build_xml_tag(tag_name, attributes, data, self._indent, self._indent_char)
+        )
 
     def push_tag(self, tag_name, attributes=None):
         if attributes is None:

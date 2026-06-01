@@ -33,31 +33,29 @@ import scanner
 
 from . import utils
 
-
-_CACHE_VERSION_FILENAME = '.cache-version'
+_CACHE_VERSION_FILENAME = ".cache-version"
 
 
 def _get_versionhash():
     toplevel = os.path.dirname(scanner.__file__)
-    sources = glob.glob(os.path.join(toplevel, '*.py'))
+    sources = glob.glob(os.path.join(toplevel, "*.py"))
     sources.append(sys.argv[0])
     # Using mtimes is a bit (5x) faster than hashing the file contents
     mtimes = (str(os.stat(source).st_mtime) for source in sources)
     # ASCII encoding is sufficient since we are only dealing with numbers.
-    return hashlib.sha1(''.join(mtimes).encode('ascii')).hexdigest()
+    return hashlib.sha1("".join(mtimes).encode("ascii")).hexdigest()
 
 
 class CacheStore(object):
-
     def __init__(self):
         self._directory = self._get_cachedir()
         self._check_cache_version()
 
     def _get_cachedir(self):
-        if 'GI_SCANNER_DISABLE_CACHE' in os.environ:
+        if "GI_SCANNER_DISABLE_CACHE" in os.environ:
             return None
         else:
-            cachedir = utils.get_user_cache_dir('g-ir-scanner')
+            cachedir = utils.get_user_cache_dir("g-ir-scanner")
             return cachedir
 
     def _check_cache_version(self):
@@ -67,7 +65,7 @@ class CacheStore(object):
         current_hash = _get_versionhash()
         version = os.path.join(self._directory, _CACHE_VERSION_FILENAME)
         try:
-            with open(version, 'r', encoding='utf-8') as version_file:
+            with open(version, "r", encoding="utf-8") as version_file:
                 cache_hash = version_file.read()
         except (IOError, OSError) as e:
             # File does not exist
@@ -81,9 +79,9 @@ class CacheStore(object):
 
         self._clean()
 
-        tmp_fd, tmp_filename = tempfile.mkstemp(prefix='g-ir-scanner-cache-version-')
+        tmp_fd, tmp_filename = tempfile.mkstemp(prefix="g-ir-scanner-cache-version-")
         try:
-            with os.fdopen(tmp_fd, 'w', encoding='utf-8') as tmp_file:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as tmp_file:
                 tmp_file.write(current_hash)
 
             # On Unix, this would just be os.rename() but Windows
@@ -104,7 +102,7 @@ class CacheStore(object):
             return
         # Assume UTF-8 encoding for the filenames. This doesn't matter so much
         # as long as the results of this method always produce the same hash.
-        hexdigest = hashlib.sha1(filename.encode('utf-8')).hexdigest()
+        hexdigest = hashlib.sha1(filename.encode("utf-8")).hexdigest()
         return os.path.join(self._directory, hexdigest)
 
     def _cache_is_valid(self, store_filename, filename):
@@ -139,9 +137,9 @@ class CacheStore(object):
         if self._cache_is_valid(store_filename, filename):
             return None
 
-        tmp_fd, tmp_filename = tempfile.mkstemp(prefix='g-ir-scanner-cache-')
+        tmp_fd, tmp_filename = tempfile.mkstemp(prefix="g-ir-scanner-cache-")
         try:
-            with os.fdopen(tmp_fd, 'wb') as tmp_file:
+            with os.fdopen(tmp_fd, "wb") as tmp_file:
                 pickle.dump(data, tmp_file)
         except (IOError, OSError) as e:
             # No space left on device
@@ -165,7 +163,7 @@ class CacheStore(object):
         if store_filename is None:
             return
         try:
-            fd = open(store_filename, 'rb')
+            fd = open(store_filename, "rb")
         except (IOError, OSError) as e:
             if e.errno == errno.ENOENT:
                 return None

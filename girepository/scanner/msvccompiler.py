@@ -39,7 +39,6 @@ def get_msvc_compiler():
 
 
 class MSVCCompiler(DistutilsMSVCCompiler):
-
     def __init__(self, verbose=0, dry_run=0, force=0):
         super(DistutilsMSVCCompiler, self).__init__()
         CCompiler.__init__(self, verbose, dry_run, force)
@@ -48,9 +47,9 @@ class MSVCCompiler(DistutilsMSVCCompiler):
         self.initialized = False
         self.preprocess_options = None
         if self.check_is_clang_cl():
-            cc_cmd = os.environ.get('CC').split()
+            cc_cmd = os.environ.get("CC").split()
             self.cc = cc_cmd[0]
-            self.linker = 'lld-link'
+            self.linker = "lld-link"
             self.compile_options = []
             # Add any arguments added to clang-cl to self.compile_options
             # such as cross-compilation flags
@@ -58,24 +57,25 @@ class MSVCCompiler(DistutilsMSVCCompiler):
                 self.compile_options.extend(cc_cmd[1:])
             self.initialized = True
 
-    def preprocess(self,
-                   source,
-                   output_file=None,
-                   macros=None,
-                   include_dirs=None,
-                   extra_preargs=None,
-                   extra_postargs=None):
+    def preprocess(
+        self,
+        source,
+        output_file=None,
+        macros=None,
+        include_dirs=None,
+        extra_preargs=None,
+        extra_postargs=None,
+    ):
         if self.initialized is False:
             self.initialize()
 
-        (_, macros, include_dirs) = \
-            self._fix_compile_args(None, macros, include_dirs)
+        _, macros, include_dirs = self._fix_compile_args(None, macros, include_dirs)
         pp_opts = gen_preprocess_options(macros, include_dirs)
-        preprocess_options = ['-E']
+        preprocess_options = ["-E"]
         source_basename = None
 
         if output_file is not None:
-            preprocess_options.append('-P')
+            preprocess_options.append("-P")
             source_basename = self._get_file_basename(source)
         cpp_args = [self.cc] if os.path.exists(self.cc) else self.cc.split()
         if extra_preargs is not None:
@@ -101,16 +101,16 @@ class MSVCCompiler(DistutilsMSVCCompiler):
         # so in order to output the specified filename, we need to rename
         # that file
         if output_file is not None:
-            if output_file != source_basename + '.i':
-                os.rename(source_basename + '.i', output_file)
+            if output_file != source_basename + ".i":
+                os.rename(source_basename + ".i", output_file)
 
     def _get_file_basename(self, filename):
         if filename is None:
             return None
-        if filename.rfind('.') == -1:
-            return filename[filename.rfind('\\') + 1:]
+        if filename.rfind(".") == -1:
+            return filename[filename.rfind("\\") + 1 :]
         else:
-            return filename[filename.rfind('\\') + 1:filename.rfind('.')]
+            return filename[filename.rfind("\\") + 1 : filename.rfind(".")]
 
     def check_is_clang_cl(self):
         # To run g-ir-scanner under Windows using clang-cl, set both `CC` and
@@ -118,7 +118,9 @@ class MSVCCompiler(DistutilsMSVCCompiler):
         # lld-link.exe are in the PATH in a Visual Studio command prompt.  Note
         # that the Windows SDK is still needed in this case.  This is in line
         # with what is done in Meson
-        return (os.environ.get('CC') is not None and
-                os.environ.get('CXX') is not None and
-                os.environ.get('CC').split()[0] == 'clang-cl' and
-                os.environ.get('CXX').split()[0] == 'clang-cl')
+        return (
+            os.environ.get("CC") is not None
+            and os.environ.get("CXX") is not None
+            and os.environ.get("CC").split()[0] == "clang-cl"
+            and os.environ.get("CXX").split()[0] == "clang-cl"
+        )

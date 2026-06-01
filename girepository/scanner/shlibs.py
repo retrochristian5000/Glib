@@ -48,7 +48,8 @@ def _resolve_libtool(options, binary, libraries):
 # We say that if something in the output looks like libpangoft2<blah>
 # then the *first* such in the output is the soname.
 def _ldd_library_pattern(library_name):
-    return re.compile(r"""^
+    return re.compile(
+        r"""^
     # Require trailing slash to avoid matching liblibfoo when looking for libfoo.
     (.*[/])?
     lib%s
@@ -56,7 +57,10 @@ def _ldd_library_pattern(library_name):
     [^/A-Za-z0-9_-]
     # Anything but the path separator to avoid matching directories.
     [^/]*
-    $""" % re.escape(library_name), re.VERBOSE)
+    $"""
+        % re.escape(library_name),
+        re.VERBOSE,
+    )
 
 
 # This is a what we do for non-la files. We assume that we are on an
@@ -76,20 +80,20 @@ def _resolve_non_libtool(options, binary, libraries):
     if not libraries:
         return []
 
-    if platform.platform().startswith('OpenBSD'):
+    if platform.platform().startswith("OpenBSD"):
         # Hack for OpenBSD when using the ports' libtool which uses slightly
         # different directories to store the libraries in. So rewite binary.args[0]
         # by inserting '.libs/'.
         old_argdir = binary.args[0]
-        new_libsdir = os.path.join(os.path.dirname(binary.args[0]), '.libs/')
+        new_libsdir = os.path.join(os.path.dirname(binary.args[0]), ".libs/")
         new_lib = new_libsdir + os.path.basename(binary.args[0])
         if os.path.exists(new_lib):
             binary.args[0] = new_lib
-            os.putenv('LD_LIBRARY_PATH', new_libsdir)
+            os.putenv("LD_LIBRARY_PATH", new_libsdir)
         else:
             binary.args[0] = old_argdir
 
-    if host_os() == 'nt':
+    if host_os() == "nt":
         cc = CCompiler()
         return cc.resolve_windows_libs(libraries, options)
     else:
@@ -97,15 +101,15 @@ def _resolve_non_libtool(options, binary, libraries):
         libtool = get_libtool_command(options)
         if libtool:
             args.extend(libtool)
-            args.append('--mode=execute')
+            args.append("--mode=execute")
         platform_system = platform.system()
         if options.ldd_wrapper:
             args.extend(options.ldd_wrapper)
             args.append(binary.args[0])
-        elif platform_system == 'Darwin':
-            args.extend(['otool', '-L', binary.args[0]])
+        elif platform_system == "Darwin":
+            args.extend(["otool", "-L", binary.args[0]])
         else:
-            args.extend(['ldd', binary.args[0]])
+            args.extend(["ldd", binary.args[0]])
         output = subprocess.check_output(args)
         if isinstance(output, bytes):
             output = output.decode("utf-8", "replace")
@@ -141,7 +145,7 @@ def resolve_from_ldd_output(libraries, output):
         # ldd on *BSD show the argument passed on the first line even if
         # there is only one argument. We have to ignore it because it is
         # possible for the name of the binary to match _ldd_library_pattern.
-        if line.endswith(':'):
+        if line.endswith(":"):
             continue
         for word in line.split():
             for library, pattern in patterns.items():
@@ -153,8 +157,9 @@ def resolve_from_ldd_output(libraries, output):
 
     if len(patterns) > 0:
         raise SystemExit(
-            "ERROR: can't resolve libraries to shared libraries: " +
-            ", ".join(patterns.keys()))
+            "ERROR: can't resolve libraries to shared libraries: "
+            + ", ".join(patterns.keys())
+        )
 
     return shlibs
 
@@ -169,5 +174,6 @@ def resolve_shlibs(options, binary, libraries):
     libtool = list(filter(lambda x: x.endswith(".la"), libraries))
     non_libtool = list(filter(lambda x: not x.endswith(".la"), libraries))
 
-    return (_resolve_libtool(options, binary, libtool) +
-            _resolve_non_libtool(options, binary, non_libtool))
+    return _resolve_libtool(options, binary, libtool) + _resolve_non_libtool(
+        options, binary, non_libtool
+    )

@@ -44,17 +44,15 @@ G_PARAM_STATIC_BLURB = 1 << 7
 
 
 class IntrospectionBinary(object):
-
     def __init__(self, args, tmpdir=None):
         self.args = args
         if tmpdir is None:
-            self.tmpdir = tempfile.mkdtemp('', 'tmp-introspect')
+            self.tmpdir = tempfile.mkdtemp("", "tmp-introspect")
         else:
             self.tmpdir = tmpdir
 
 
 class Unresolved(object):
-
     def __init__(self, target):
         self.target = target
 
@@ -64,7 +62,6 @@ class UnknownTypeError(Exception):
 
 
 class GDumpParser(object):
-
     def __init__(self, transformer):
         self._transformer = transformer
         self._namespace = transformer.namespace
@@ -90,7 +87,7 @@ class GDumpParser(object):
             if isinstance(node, girast.Function):
                 self._initparse_function(node)
 
-        if self._namespace.name == 'GObject' or self._namespace.name == 'GLib':
+        if self._namespace.name == "GObject" or self._namespace.name == "GLib":
             for node in list(self._namespace.values()):
                 if isinstance(node, girast.Record):
                     self._initparse_gobject_record(node)
@@ -112,7 +109,7 @@ class GDumpParser(object):
         tree = self._execute_binary_get_tree()
         root = tree.getroot()
         for child in root:
-            if child.tag == 'error-quark':
+            if child.tag == "error-quark":
                 self._introspect_error_quark(child)
             else:
                 self._introspect_type(child)
@@ -132,10 +129,10 @@ class GDumpParser(object):
         for name, node in self._namespace.items():
             if isinstance(node, girast.Registered) and node.get_type is not None:
                 get_type_name = node.get_type
-                if get_type_name == 'intern':
+                if get_type_name == "intern":
                     continue
                 assert get_type_name, node
-                (ns, name) = self._transformer.split_csymbol(get_type_name)
+                ns, name = self._transformer.split_csymbol(get_type_name)
                 assert ns is self._namespace
                 get_type_func = self._namespace.get(name)
                 assert get_type_func, name
@@ -147,28 +144,28 @@ class GDumpParser(object):
 
     def _execute_binary_get_tree(self):
         """Load the library (or executable), returning an XML
-blob containing data gleaned from GObject's primitive introspection."""
-        in_path = os.path.join(self._binary.tmpdir, 'functions.txt')
-        with open(in_path, 'w', encoding='utf-8') as f:
+        blob containing data gleaned from GObject's primitive introspection."""
+        in_path = os.path.join(self._binary.tmpdir, "functions.txt")
+        with open(in_path, "w", encoding="utf-8") as f:
             for func in self._get_type_functions:
-                f.write('get-type:')
+                f.write("get-type:")
                 f.write(func)
-                f.write('\n')
+                f.write("\n")
             for func in self._error_quark_functions:
-                f.write('error-quark:')
+                f.write("error-quark:")
                 f.write(func)
-                f.write('\n')
-        out_path = os.path.join(self._binary.tmpdir, 'dump.xml')
+                f.write("\n")
+        out_path = os.path.join(self._binary.tmpdir, "dump.xml")
 
         args = []
 
         # Prepend the launcher command and arguments, if defined
-        launcher = os.environ.get('GI_CROSS_LAUNCHER')
+        launcher = os.environ.get("GI_CROSS_LAUNCHER")
         if launcher:
             args.extend(launcher.split())
 
         args.extend(self._binary.args)
-        args.append('--introspect-dump=%s,%s' % (in_path, out_path))
+        args.append("--introspect-dump=%s,%s" % (in_path, out_path))
 
         # Invoke the binary, having written our get_type functions to types.txt
         try:
@@ -179,22 +176,22 @@ blob containing data gleaned from GObject's primitive introspection."""
                 raise SystemExit(e)
             return parse(out_path)
         finally:
-            if not utils.have_debug_flag('save-temps'):
+            if not utils.have_debug_flag("save-temps"):
                 utils.rmtree(self._binary.tmpdir)
 
     # Parser
 
     def _initparse_function(self, func):
         symbol = func.symbol
-        if symbol.startswith('_'):
+        if symbol.startswith("_"):
             return
-        elif (symbol.endswith('_get_type') or symbol.endswith('_get_gtype')):
+        elif symbol.endswith("_get_type") or symbol.endswith("_get_gtype"):
             self._initparse_get_type_function(func)
-        elif symbol.endswith('_error_quark'):
+        elif symbol.endswith("_error_quark"):
             self._initparse_error_quark_function(func)
 
     def _initparse_get_type_function(self, func):
-        if func.symbol == 'g_variant_get_gtype':
+        if func.symbol == "g_variant_get_gtype":
             # We handle variants internally, see _initparse_gobject_record
             return True
 
@@ -205,38 +202,46 @@ blob containing data gleaned from GObject's primitive introspection."""
         return False
 
     def _initparse_error_quark_function(self, func):
-        if (func.retval.type.ctype != 'GQuark'):
+        if func.retval.type.ctype != "GQuark":
             return False
         self._error_quark_functions.append(func.symbol)
         return True
 
     def _initparse_gobject_record(self, record):
-        if (record.name.startswith('ParamSpec')
-        and record.name not in ('ParamSpecPool', 'ParamSpecClass', 'ParamSpecTypeInfo')):
+        if record.name.startswith("ParamSpec") and record.name not in (
+            "ParamSpecPool",
+            "ParamSpecClass",
+            "ParamSpecTypeInfo",
+        ):
             parent = None
-            if record.name != 'ParamSpec':
-                parent = girast.Type(target_giname='GObject.ParamSpec')
+            if record.name != "ParamSpec":
+                parent = girast.Type(target_giname="GObject.ParamSpec")
             prefix = to_underscores(record.name).lower()
-            node = girast.Class(record.name, parent,
-                             ctype=record.ctype,
-                             # GParamSpecXxx has g_type_name 'GParamXxx'
-                             gtype_name=record.ctype.replace('Spec', ''),
-                             get_type='intern',
-                             c_symbol_prefix=prefix)
+            node = girast.Class(
+                record.name,
+                parent,
+                ctype=record.ctype,
+                # GParamSpecXxx has g_type_name 'GParamXxx'
+                gtype_name=record.ctype.replace("Spec", ""),
+                get_type="intern",
+                c_symbol_prefix=prefix,
+            )
             node.fundamental = True
-            if record.name == 'ParamSpec':
+            if record.name == "ParamSpec":
                 node.is_abstract = True
             self._add_record_fields(node)
             self._namespace.append(node, replace=True)
-        elif record.name == 'Variant':
-            self._boxed_types['GVariant'] = girast.Boxed('Variant',
-                                                      gtype_name='GVariant',
-                                                      get_type='intern',
-                                                      c_symbol_prefix='variant')
-        elif record.name == 'InitiallyUnownedClass':
+        elif record.name == "Variant":
+            self._boxed_types["GVariant"] = girast.Boxed(
+                "Variant",
+                gtype_name="GVariant",
+                get_type="intern",
+                c_symbol_prefix="variant",
+            )
+        elif record.name == "InitiallyUnownedClass":
             # InitiallyUnowned is just GObject with extra steps, so we alias
             # it in the introspection data
-            record.fields = self._namespace.get('ObjectClass').fields
+            record.fields = self._namespace.get("ObjectClass").fields
             record.opaque = False
             record.disguised = False
 
@@ -244,24 +249,24 @@ blob containing data gleaned from GObject's primitive introspection."""
     # GObject/GType system out of the binary
 
     def _introspect_type(self, xmlnode):
-        if xmlnode.tag in ('enum', 'flags'):
+        if xmlnode.tag in ("enum", "flags"):
             self._introspect_enum(xmlnode)
-        elif xmlnode.tag == 'class':
+        elif xmlnode.tag == "class":
             self._introspect_object(xmlnode)
-        elif xmlnode.tag == 'interface':
+        elif xmlnode.tag == "interface":
             self._introspect_interface(xmlnode)
-        elif xmlnode.tag == 'boxed':
+        elif xmlnode.tag == "boxed":
             self._introspect_boxed(xmlnode)
-        elif xmlnode.tag == 'pointer':
+        elif xmlnode.tag == "pointer":
             self._introspect_pointer(xmlnode)
-        elif xmlnode.tag == 'fundamental':
+        elif xmlnode.tag == "fundamental":
             self._introspect_fundamental(xmlnode)
         else:
             raise ValueError("Unhandled introspection XML tag %s", xmlnode.tag)
 
     def _introspect_enum(self, xmlnode):
-        type_name = xmlnode.attrib['name']
-        (get_type, c_symbol_prefix) = self._split_type_and_symbol_prefix(xmlnode)
+        type_name = xmlnode.attrib["name"]
+        get_type, c_symbol_prefix = self._split_type_and_symbol_prefix(xmlnode)
         try:
             enum_name = self._transformer.strip_identifier(type_name)
         except TransformerException as e:
@@ -280,68 +285,77 @@ blob containing data gleaned from GObject's primitive introspection."""
                 previous_symbols[member.name] = member.symbol
 
         members = []
-        for member in xmlnode.findall('member'):
+        for member in xmlnode.findall("member"):
             # Keep the name closer to what we'd take from C by default;
             # see http://bugzilla.gnome.org/show_bug.cgi?id=575613
-            name = member.attrib['nick'].replace('-', '_')
+            name = member.attrib["nick"].replace("-", "_")
 
             if name in previous_values:
                 value = previous_values[name]
                 symbol = previous_symbols[name]
             else:
-                value = member.attrib['value']
-                symbol = member.attrib['name']
+                value = member.attrib["value"]
+                symbol = member.attrib["name"]
 
-            members.append(girast.Member(name,
-                                      value,
-                                      symbol,
-                                      member.attrib['nick'],
-                                      member.attrib['name']))
+            members.append(
+                girast.Member(
+                    name, value, symbol, member.attrib["nick"], member.attrib["name"]
+                )
+            )
 
-        if xmlnode.tag == 'flags':
+        if xmlnode.tag == "flags":
             klass = girast.Bitfield
         else:
             klass = girast.Enum
 
-        node = klass(enum_name, type_name,
-                     gtype_name=type_name,
-                     c_symbol_prefix=c_symbol_prefix,
-                     members=members,
-                     get_type=xmlnode.attrib['get-type'])
+        node = klass(
+            enum_name,
+            type_name,
+            gtype_name=type_name,
+            c_symbol_prefix=c_symbol_prefix,
+            members=members,
+            get_type=xmlnode.attrib["get-type"],
+        )
         self._namespace.append(node, replace=True)
 
     def _split_type_and_symbol_prefix(self, xmlnode):
         """Infer the C symbol prefix from the _get_type function."""
-        get_type = xmlnode.attrib['get-type']
-        (ns, name) = self._transformer.split_csymbol(get_type)
+        get_type = xmlnode.attrib["get-type"]
+        ns, name = self._transformer.split_csymbol(get_type)
         assert ns is self._namespace
-        if name in ('get_type', '_get_gtype'):
-            message.fatal("""The GObject name '%s' isn't compatible
+        if name in ("get_type", "_get_gtype"):
+            message.fatal(
+                """The GObject name '%s' isn't compatible
 with the configured identifier prefixes:
   %r
 The class would have no name.  Most likely you want to specify a
-different --identifier-prefix.""" % (xmlnode.attrib['name'], self._namespace.identifier_prefixes))
-        if name.endswith('_get_type'):
-            type_suffix = '_get_type'
+different --identifier-prefix."""
+                % (xmlnode.attrib["name"], self._namespace.identifier_prefixes)
+            )
+        if name.endswith("_get_type"):
+            type_suffix = "_get_type"
         else:
-            type_suffix = '_get_gtype'
-        return (get_type, name[:-len(type_suffix)])
+            type_suffix = "_get_gtype"
+        return (get_type, name[: -len(type_suffix)])
 
     def _introspect_object(self, xmlnode):
-        type_name = xmlnode.attrib['name']
-        is_abstract = bool(xmlnode.attrib.get('abstract', False))
-        is_final = bool(xmlnode.attrib.get('final', False))
-        (get_type, c_symbol_prefix) = self._split_type_and_symbol_prefix(xmlnode)
+        type_name = xmlnode.attrib["name"]
+        is_abstract = bool(xmlnode.attrib.get("abstract", False))
+        is_final = bool(xmlnode.attrib.get("final", False))
+        get_type, c_symbol_prefix = self._split_type_and_symbol_prefix(xmlnode)
         try:
             object_name = self._transformer.strip_identifier(type_name)
         except TransformerException as e:
             message.fatal(e)
-        node = girast.Class(object_name, None,
-                         gtype_name=type_name,
-                         get_type=get_type,
-                         c_symbol_prefix=c_symbol_prefix,
-                         is_abstract=is_abstract,
-                         is_final=is_final)
+        node = girast.Class(
+            object_name,
+            None,
+            gtype_name=type_name,
+            get_type=get_type,
+            c_symbol_prefix=c_symbol_prefix,
+            is_abstract=is_abstract,
+            is_final=is_final,
+        )
         self._parse_parents(xmlnode, node)
         self._introspect_properties(node, xmlnode)
         self._introspect_signals(node, xmlnode)
@@ -350,20 +364,23 @@ different --identifier-prefix.""" % (xmlnode.attrib['name'], self._namespace.ide
         self._namespace.append(node, replace=True)
 
     def _introspect_interface(self, xmlnode):
-        type_name = xmlnode.attrib['name']
-        (get_type, c_symbol_prefix) = self._split_type_and_symbol_prefix(xmlnode)
+        type_name = xmlnode.attrib["name"]
+        get_type, c_symbol_prefix = self._split_type_and_symbol_prefix(xmlnode)
         try:
             interface_name = self._transformer.strip_identifier(type_name)
         except TransformerException as e:
             message.fatal(e)
-        node = girast.Interface(interface_name, None,
-                             gtype_name=type_name,
-                             get_type=get_type,
-                             c_symbol_prefix=c_symbol_prefix)
+        node = girast.Interface(
+            interface_name,
+            None,
+            gtype_name=type_name,
+            get_type=get_type,
+            c_symbol_prefix=c_symbol_prefix,
+        )
         self._introspect_properties(node, xmlnode)
         self._introspect_signals(node, xmlnode)
-        for child in xmlnode.findall('prerequisite'):
-            name = child.attrib['name']
+        for child in xmlnode.findall("prerequisite"):
+            name = child.attrib["name"]
             prereq = girast.Type.create_from_gtype_name(name)
             node.prerequisites.append(prereq)
 
@@ -371,11 +388,13 @@ different --identifier-prefix.""" % (xmlnode.attrib['name'], self._namespace.ide
         if isinstance(record, girast.Record):
             node.ctype = record.ctype
         else:
-            message.warn_node(node, "Couldn't find associated structure for '%s'" % (node.name, ))
+            message.warn_node(
+                node, "Couldn't find associated structure for '%s'" % (node.name,)
+            )
 
         # GtkFileChooserEmbed is an example of a private interface, we
         # just filter them out
-        if xmlnode.attrib['get-type'].startswith('_'):
+        if xmlnode.attrib["get-type"].startswith("_"):
             self._private_internal_types[type_name] = node
         else:
             self._namespace.append(node, replace=True)
@@ -383,17 +402,20 @@ different --identifier-prefix.""" % (xmlnode.attrib['name'], self._namespace.ide
     # WORKAROUND
     # https://bugzilla.gnome.org/show_bug.cgi?id=550616
     def _introspect_boxed_gstreamer_workaround(self, xmlnode):
-        node = girast.Boxed('ParamSpecMiniObject', gtype_name='GParamSpecMiniObject',
-                         get_type='gst_param_spec_mini_object_get_type',
-                         c_symbol_prefix='param_spec_mini_object')
+        node = girast.Boxed(
+            "ParamSpecMiniObject",
+            gtype_name="GParamSpecMiniObject",
+            get_type="gst_param_spec_mini_object_get_type",
+            c_symbol_prefix="param_spec_mini_object",
+        )
         self._boxed_types[node.gtype_name] = node
 
     def _introspect_boxed(self, xmlnode):
-        type_name = xmlnode.attrib['name']
+        type_name = xmlnode.attrib["name"]
 
         # Work around GStreamer legacy naming issue
         # https://bugzilla.gnome.org/show_bug.cgi?id=550616
-        if type_name == 'GParamSpecMiniObject':
+        if type_name == "GParamSpecMiniObject":
             self._introspect_boxed_gstreamer_workaround(xmlnode)
             return
 
@@ -403,102 +425,126 @@ different --identifier-prefix.""" % (xmlnode.attrib['name'], self._namespace.ide
             message.fatal(e)
         # This one doesn't go in the main namespace; we associate it with
         # the struct or union
-        (get_type, c_symbol_prefix) = self._split_type_and_symbol_prefix(xmlnode)
-        node = girast.Boxed(name, gtype_name=type_name,
-                         get_type=get_type,
-                         c_symbol_prefix=c_symbol_prefix)
+        get_type, c_symbol_prefix = self._split_type_and_symbol_prefix(xmlnode)
+        node = girast.Boxed(
+            name,
+            gtype_name=type_name,
+            get_type=get_type,
+            c_symbol_prefix=c_symbol_prefix,
+        )
         self._boxed_types[node.gtype_name] = node
 
     def _introspect_pointer(self, xmlnode):
-        type_name = xmlnode.attrib['name']
+        type_name = xmlnode.attrib["name"]
         try:
             name = self._transformer.strip_identifier(type_name)
         except TransformerException as e:
             message.fatal(e)
-        (get_type, c_symbol_prefix) = self._split_type_and_symbol_prefix(xmlnode)
-        node = girast.Pointer(name, gtype_name=type_name,
-                           get_type=get_type,
-                           c_symbol_prefix=c_symbol_prefix)
+        get_type, c_symbol_prefix = self._split_type_and_symbol_prefix(xmlnode)
+        node = girast.Pointer(
+            name,
+            gtype_name=type_name,
+            get_type=get_type,
+            c_symbol_prefix=c_symbol_prefix,
+        )
         self._pointer_types[node.gtype_name] = node
 
     def _introspect_implemented_interfaces(self, node, xmlnode):
         gt_interfaces = []
-        for interface in xmlnode.findall('implements'):
-            gitype = girast.Type.create_from_gtype_name(interface.attrib['name'])
+        for interface in xmlnode.findall("implements"):
+            gitype = girast.Type.create_from_gtype_name(interface.attrib["name"])
             gt_interfaces.append(gitype)
         node.interfaces = gt_interfaces
 
     def _introspect_properties(self, node, xmlnode):
-        for pspec in xmlnode.findall('property'):
-            ctype = pspec.attrib['type']
-            flags = int(pspec.attrib['flags'])
+        for pspec in xmlnode.findall("property"):
+            ctype = pspec.attrib["type"]
+            flags = int(pspec.attrib["flags"])
             readable = (flags & G_PARAM_READABLE) != 0
             writable = (flags & G_PARAM_WRITABLE) != 0
             construct = (flags & G_PARAM_CONSTRUCT) != 0
             construct_only = (flags & G_PARAM_CONSTRUCT_ONLY) != 0
-            default_value = pspec.attrib.get('default-value')
+            default_value = pspec.attrib.get("default-value")
             prop = girast.Property(
-                pspec.attrib['name'],
+                pspec.attrib["name"],
                 girast.Type.create_from_gtype_name(ctype),
-                readable, writable, construct, construct_only)
+                readable,
+                writable,
+                construct,
+                construct_only,
+            )
             prop.default_value = default_value
             node.properties.append(prop)
         node.properties = node.properties
 
     def _introspect_signals(self, node, xmlnode):
-        for signal_info in xmlnode.findall('signal'):
-            rctype = signal_info.attrib['return']
+        for signal_info in xmlnode.findall("signal"):
+            rctype = signal_info.attrib["return"]
             rtype = girast.Type.create_from_gtype_name(rctype)
             return_ = girast.Return(rtype)
             parameters = []
-            when = signal_info.attrib.get('when')
-            no_recurse = signal_info.attrib.get('no-recurse', '0') == '1'
-            detailed = signal_info.attrib.get('detailed', '0') == '1'
-            action = signal_info.attrib.get('action', '0') == '1'
-            no_hooks = signal_info.attrib.get('no-hooks', '0') == '1'
-            for i, parameter in enumerate(signal_info.findall('param')):
+            when = signal_info.attrib.get("when")
+            no_recurse = signal_info.attrib.get("no-recurse", "0") == "1"
+            detailed = signal_info.attrib.get("detailed", "0") == "1"
+            action = signal_info.attrib.get("action", "0") == "1"
+            no_hooks = signal_info.attrib.get("no-hooks", "0") == "1"
+            for i, parameter in enumerate(signal_info.findall("param")):
                 if i == 0:
-                    argname = 'object'
+                    argname = "object"
                 else:
-                    argname = 'p%s' % (i - 1, )
-                pctype = parameter.attrib['type']
+                    argname = "p%s" % (i - 1,)
+                pctype = parameter.attrib["type"]
                 ptype = girast.Type.create_from_gtype_name(pctype)
                 param = girast.Parameter(argname, ptype)
                 param.transfer = girast.PARAM_TRANSFER_NONE
                 parameters.append(param)
-            signal = girast.Signal(signal_info.attrib['name'], return_, parameters,
-                                when=when, no_recurse=no_recurse, detailed=detailed,
-                                action=action, no_hooks=no_hooks)
+            signal = girast.Signal(
+                signal_info.attrib["name"],
+                return_,
+                parameters,
+                when=when,
+                no_recurse=no_recurse,
+                detailed=detailed,
+                action=action,
+                no_hooks=no_hooks,
+            )
             node.signals.append(signal)
         node.signals = node.signals
 
     def _parse_parents(self, xmlnode, node):
-        parents_str = xmlnode.attrib.get('parents', '')
-        if parents_str != '':
-            parent_types = list(map(lambda s: girast.Type.create_from_gtype_name(s),
-                                    parents_str.split(',')))
+        parents_str = xmlnode.attrib.get("parents", "")
+        if parents_str != "":
+            parent_types = list(
+                map(
+                    lambda s: girast.Type.create_from_gtype_name(s),
+                    parents_str.split(","),
+                )
+            )
         else:
             parent_types = []
         node.parent_chain = parent_types
 
     def _introspect_fundamental(self, xmlnode):
-        type_name = xmlnode.attrib['name']
+        type_name = xmlnode.attrib["name"]
 
-        is_abstract = bool(xmlnode.attrib.get('abstract', False))
-        is_final = bool(xmlnode.attrib.get('final', False))
-        (get_type, c_symbol_prefix) = self._split_type_and_symbol_prefix(xmlnode)
+        is_abstract = bool(xmlnode.attrib.get("abstract", False))
+        is_final = bool(xmlnode.attrib.get("final", False))
+        get_type, c_symbol_prefix = self._split_type_and_symbol_prefix(xmlnode)
         try:
             fundamental_name = self._transformer.strip_identifier(type_name)
         except TransformerException as e:
             message.warn(e)
             return
 
-        node = girast.Class(fundamental_name, None,
-                         gtype_name=type_name,
-                         get_type=get_type,
-                         c_symbol_prefix=c_symbol_prefix,
-                         is_abstract=is_abstract,
-                         is_final=is_final)
+        node = girast.Class(
+            fundamental_name,
+            None,
+            gtype_name=type_name,
+            get_type=get_type,
+            c_symbol_prefix=c_symbol_prefix,
+            is_abstract=is_abstract,
+            is_final=is_final,
+        )
         self._parse_parents(xmlnode, node)
         node.fundamental = True
         self._introspect_implemented_interfaces(node, xmlnode)
@@ -520,15 +566,20 @@ different --identifier-prefix.""" % (xmlnode.attrib['name'], self._namespace.ide
                 field.writable = False
 
     def _introspect_error_quark(self, xmlnode):
-        symbol = xmlnode.attrib['function']
-        error_domain = xmlnode.attrib['domain']
+        symbol = xmlnode.attrib["function"]
+        error_domain = xmlnode.attrib["domain"]
         function = self._namespace.get_by_symbol(symbol)
         if function is None:
             return
 
-        node = girast.ErrorQuarkFunction(function.name, function.retval,
-                                      function.parameters, function.throws,
-                                      function.symbol, error_domain)
+        node = girast.ErrorQuarkFunction(
+            function.name,
+            function.retval,
+            function.parameters,
+            function.throws,
+            function.symbol,
+            error_domain,
+        )
         self._namespace.append(node, replace=True)
 
     def _pair_boxed_type(self, boxed):
@@ -568,9 +619,9 @@ different --identifier-prefix.""" % (xmlnode.attrib['name'], self._namespace.ide
     def _find_class_record(self, cls):
         pair_record = None
         if isinstance(cls, girast.Class):
-            pair_record = self._namespace.get(cls.name + 'Class')
+            pair_record = self._namespace.get(cls.name + "Class")
         else:
-            for suffix in ('Iface', 'Interface'):
+            for suffix in ("Iface", "Interface"):
                 pair_record = self._namespace.get(cls.name + suffix)
                 if pair_record:
                     break

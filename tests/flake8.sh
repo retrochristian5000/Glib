@@ -17,10 +17,11 @@ export TEST_REQUIRES_TOOLS="flake8 git"
 run_lint () {
     # Disable formatting warnings in flake8, as we use `black` to handle that.
     local formatting_warnings=E101,E111,E114,E115,E116,E117,E12,E13,E2,E3,E401,E5,E70,W1,W2,W3,W5
+    local giscanner_builtins=GIR_DIR
 
     # shellcheck disable=SC2046
     flake8 \
-        --max-line-length=88 --ignore="$formatting_warnings" \
+        --max-line-length=88 --ignore="$formatting_warnings" --builtins="$giscanner_builtins" \
         $(git ls-files '*.py' 'tests/lib/*.py.in')
 }
 
