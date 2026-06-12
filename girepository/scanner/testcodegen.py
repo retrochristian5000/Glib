@@ -49,7 +49,7 @@ def uscore_from_type(typeval):
         assert False, typeval
 
 
-class EverythingCodeGenerator(object):
+class EverythingCodeGenerator:
     def __init__(
         self,
         out_h_filename,
@@ -101,7 +101,7 @@ class EverythingCodeGenerator(object):
             )
             self.namespace.append(func)
             default = get_default_for_typeval(typeval)
-            body = "  return %s;\n" % (default,)
+            body = f"  return {default};\n"
             self.gen.set_function_body(func, body)
 
         # Void return, one parameter
@@ -152,7 +152,7 @@ class EverythingCodeGenerator(object):
             self.namespace.append(func)
             body = StringIO("w")
             default = get_default_for_typeval(func.retval)
-            body.write("  *arg0 = %s;\n" % (default,))
+            body.write(f"  *arg0 = {default};\n")
             body.write("  return;\n")
             self.gen.set_function_body(func, body.getvalue())
 

@@ -24,7 +24,7 @@ from . import message
 from .annotationparser import TAG_RETURNS
 
 
-class IntrospectablePass(object):
+class IntrospectablePass:
     def __init__(self, transformer, blocks):
         self._transformer = transformer
         self._namespace = transformer.namespace
@@ -51,14 +51,14 @@ class IntrospectablePass(object):
 
         block = None
         if hasattr(parent, "symbol"):
-            prefix = "%s: " % (parent.symbol,)
+            prefix = f"{parent.symbol}: "
             block = self._blocks.get(parent.symbol)
             if block:
                 position = block.position
         else:
             prefix = ""
         if isinstance(param, girast.Parameter):
-            context = "argument %s: " % (param.argname,)
+            context = f"argument {param.argname}: "
         else:
             context = "return value: "
             if block:
@@ -80,7 +80,7 @@ class IntrospectablePass(object):
 
         if not node.type.resolved:
             self._parameter_warning(
-                parent, node, "Unresolved type: '%s'" % (node.type.unresolved_string,)
+                parent, node, f"Unresolved type: '{node.type.unresolved_string}'"
             )
             parent.introspectable = False
             return
@@ -325,10 +325,7 @@ class IntrospectablePass(object):
         return True
 
     def _property_warning(self, parent, prop, text, position=None):
-        context = "property %s:%s: " % (
-            parent.name,
-            prop.name,
-        )
+        context = f"property {parent.name}:{prop.name}: "
         message.strict_node(parent, context + text, positions=position)
 
     def _property_signal_collision(self, obj, prop):

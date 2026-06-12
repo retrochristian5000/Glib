@@ -598,7 +598,7 @@ class GtkDocAnnotations(OrderedDict):
         return GtkDocAnnotations(self, position=self.position)
 
 
-class GtkDocAnnotatable(object):
+class GtkDocAnnotatable:
     """
     Base class for GTK-Doc comment block parts that can be annotated.
     """
@@ -620,7 +620,7 @@ class GtkDocAnnotatable(object):
         self.annotations = GtkDocAnnotations()
 
     def __repr__(self):
-        return "<GtkDocAnnotatable '%s'>" % (self.annotations,)
+        return f"<GtkDocAnnotatable '{self.annotations}'>"
 
     def validate(self):
         """
@@ -639,25 +639,23 @@ class GtkDocAnnotatable(object):
                 elif ann_name in ALL_ANNOTATIONS:
                     # Not error() as ann_name might be valid in some newer
                     # GObject-Instrospection version.
-                    warn("unexpected annotation: %s" % (ann_name,), position)
+                    warn(f"unexpected annotation: {ann_name}", position)
                 else:
                     # Not error() as ann_name might be valid in some newer
                     # GObject-Instrospection version.
-                    warn("unknown annotation: %s" % (ann_name,), position)
+                    warn(f"unknown annotation: {ann_name}", position)
 
                 # Validate that (nullable) and (not nullable) are not both
                 # present. Same for (allow-none) and (not nullable).
                 if ann_name == ANN_NOT and OPT_NOT_NULLABLE in options:
                     if ANN_NULLABLE in self.annotations:
                         warn(
-                            'cannot have both "%s" and "%s" present'
-                            % (ANN_NOT + " " + OPT_NOT_NULLABLE, ANN_NULLABLE),
+                            f'cannot have both "{ANN_NOT} {OPT_NOT_NULLABLE}" and "{ANN_NULLABLE}" present',
                             position,
                         )
                     if ANN_ALLOW_NONE in self.annotations:
                         warn(
-                            'cannot have both "%s" and "%s" present'
-                            % (ANN_NOT + " " + OPT_NOT_NULLABLE, ANN_ALLOW_NONE),
+                            f'cannot have both "{ANN_NOT} {OPT_NOT_NULLABLE}" and "{ANN_ALLOW_NONE}" present',
                             position,
                         )
 
@@ -665,8 +663,7 @@ class GtkDocAnnotatable(object):
                 if ann_name == ANN_NOT and OPT_NOT_OPTIONAL in options:
                     if ANN_OPTIONAL in self.annotations:
                         warn(
-                            'cannot have both "%s" and "%s" present'
-                            % (ANN_NOT + " " + OPT_NOT_OPTIONAL, ANN_OPTIONAL),
+                            f'cannot have both "{ANN_NOT} {OPT_NOT_OPTIONAL}" and "{ANN_OPTIONAL}" present',
                             position,
                         )
 
@@ -691,19 +688,17 @@ class GtkDocAnnotatable(object):
         if n_options == 0:
             t = "none"
         else:
-            t = "%d" % (n_options,)
+            t = f"{n_options}"
 
         if expected_n_options == 0:
             s = "no options"
         elif expected_n_options == 1:
             s = "one option"
         else:
-            s = "%d options" % (expected_n_options,)
+            s = f"{expected_n_options} options"
 
         if operator(n_options, expected_n_options):
-            warn(
-                '"%s" annotation %s %s, %s given' % (ann_name, message, s, t), position
-            )
+            warn(f'"{ann_name}" annotation {message} {s}, {t} given', position)
 
     def _validate_annotation(
         self,
@@ -749,7 +744,7 @@ class GtkDocAnnotatable(object):
             option = options[0]
             if option not in choices:
                 warn(
-                    'invalid "%s" annotation option: "%s"' % (ann_name, option),
+                    f'invalid "{ann_name}" annotation option: "{option}"',
                     position,
                 )
 
@@ -785,32 +780,29 @@ class GtkDocAnnotatable(object):
                 except (TypeError, ValueError):
                     if value is None:
                         warn(
-                            '"%s" annotation option "%s" needs a value'
-                            % (ann_name, option),
+                            f'"{ann_name}" annotation option "{option}" needs a value',
                             position,
                         )
                     else:
                         warn(
-                            'invalid "%s" annotation option "%s" value "%s", must be an integer'
-                            % (ann_name, option, value),
+                            f'invalid "{ann_name}" annotation option "{option}" value "{value}", must be an integer',
                             position,
                         )
             elif option == OPT_ARRAY_ZERO_TERMINATED:
                 if value is not None and value not in ["0", "1"]:
                     warn(
-                        'invalid "%s" annotation option "%s" value "%s", must be 0 or 1'
-                        % (ann_name, option, value),
+                        f'invalid "{ann_name}" annotation option "{option}" value "{value}", must be 0 or 1',
                         position,
                     )
             elif option == OPT_ARRAY_LENGTH:
                 if value is None:
                     warn(
-                        '"%s" annotation option "length" needs a value' % (ann_name,),
+                        f'"{ann_name}" annotation option "length" needs a value',
                         position,
                     )
             else:
                 warn(
-                    'invalid "%s" annotation option: "%s"' % (ann_name, option),
+                    f'invalid "{ann_name}" annotation option: "{option}"',
                     position,
                 )
 
@@ -1283,7 +1275,7 @@ class GtkDocParameter(GtkDocAnnotatable):
         self.description = None
 
     def __repr__(self):
-        return "<GtkDocParameter '%s' %r>" % (self.name, self.annotations)
+        return f"<GtkDocParameter '{self.name}' {self.annotations!r}>"
 
 
 class GtkDocTag(GtkDocAnnotatable):
@@ -1319,7 +1311,7 @@ class GtkDocTag(GtkDocAnnotatable):
         self.description = None
 
     def __repr__(self):
-        return "<GtkDocTag '%s' %r>" % (self.name, self.annotations)
+        return f"<GtkDocTag '{self.name}' {self.annotations!r}>"
 
 
 class GtkDocCommentBlock(GtkDocAnnotatable):
@@ -1421,7 +1413,7 @@ class GtkDocCommentBlock(GtkDocAnnotatable):
         return hash(self.name)
 
     def __repr__(self):
-        return "<GtkDocCommentBlock '%s' %r>" % (self.name, self.annotations)
+        return f"<GtkDocCommentBlock '{self.name}' {self.annotations!r}>"
 
     def validate(self):
         """
@@ -1450,7 +1442,7 @@ _ParseFieldsResult = namedtuple(
 )
 
 
-class GtkDocCommentBlockParser(object):
+class GtkDocCommentBlockParser:
     """
     Parse GTK-Doc comment blocks into a parse tree built out of :class:`GtkDocCommentBlock`,
     :class:`GtkDocParameter`, :class:`GtkDocTag` and :class:`GtkDocAnnotations`
@@ -1493,8 +1485,7 @@ class GtkDocCommentBlockParser(object):
             except Exception as e:
                 error(
                     "unrecoverable parse error, please file a GObject-Introspection bug"
-                    "report including the complete comment block at the indicated location. %s"
-                    % str(e),
+                    f"report including the complete comment block at the indicated location. {str(e)}",
                     Position(filename, lineno),
                 )
                 continue
@@ -1508,9 +1499,8 @@ class GtkDocCommentBlockParser(object):
                     firstseen = comment_blocks[comment_block.name]
                     path = os.path.dirname(firstseen.position.filename)
                     warn(
-                        "multiple comment blocks documenting '%s:' identifier "
-                        "(already seen at %s)."
-                        % (comment_block.name, firstseen.position.format(path)),
+                        f"multiple comment blocks documenting '{comment_block.name}:' "
+                        f"identifier (already seen at {firstseen.position.format(path)}).",
                         comment_block.position,
                     )
 
@@ -1666,7 +1656,7 @@ class GtkDocCommentBlockParser(object):
                 result = SECTION_RE.match(line)
 
                 if result:
-                    identifier_name = "SECTION:%s" % (result.group("section_name"),)
+                    identifier_name = f"SECTION:{result.group('section_name')}"
                     identifier_delimiter = None
                     identifier_fields = None
                     identifier_fields_start = None
@@ -1674,10 +1664,7 @@ class GtkDocCommentBlockParser(object):
                     result = PROPERTY_RE.match(line)
 
                     if result:
-                        identifier_name = "%s:%s" % (
-                            result.group("class_name"),
-                            result.group("property_name"),
-                        )
+                        identifier_name = f'{result.group("class_name")}:{result.group("property_name")}'
                         identifier_delimiter = result.group("delimiter")
                         identifier_fields = result.group("fields")
                         identifier_fields_start = result.start("fields")
@@ -1685,10 +1672,7 @@ class GtkDocCommentBlockParser(object):
                         result = SIGNAL_RE.match(line)
 
                         if result:
-                            identifier_name = "%s::%s" % (
-                                result.group("class_name"),
-                                result.group("signal_name"),
-                            )
+                            identifier_name = f'{result.group("class_name")}::{result.group("signal_name")}'
                             identifier_delimiter = result.group("delimiter")
                             identifier_fields = result.group("fields")
                             identifier_fields_start = result.start("fields")
@@ -1696,10 +1680,7 @@ class GtkDocCommentBlockParser(object):
                             result = ACTION_RE.match(line)
 
                             if result:
-                                identifier_name = "ACTION:%s:%s" % (
-                                    result.group("class_name"),
-                                    result.group("action_name"),
-                                )
+                                identifier_name = f'ACTION:{result.group("class_name")}:{result.group("action_name")}'
                                 identifier_delimiter = None
                                 identifier_fields = None
                                 identifier_fields_start = None
@@ -1707,10 +1688,7 @@ class GtkDocCommentBlockParser(object):
                                 result = FIELD_RE.match(line)
 
                                 if result:
-                                    identifier_name = "%s.%s" % (
-                                        result.group("class_name"),
-                                        result.group("field_name"),
-                                    )
+                                    identifier_name = f'{result.group("class_name")}.{result.group("field_name")}'
                                     identifier_delimiter = result.group("delimiter")
                                     identifier_fields = result.group("fields")
                                     identifier_fields_start = result.start("fields")
@@ -1718,9 +1696,7 @@ class GtkDocCommentBlockParser(object):
                                     result = SYMBOL_RE.match(line)
 
                                     if result:
-                                        identifier_name = "%s" % (
-                                            result.group("symbol_name"),
-                                        )
+                                        identifier_name = result.group("symbol_name")
                                         identifier_delimiter = result.group("delimiter")
                                         identifier_fields = result.group("fields")
                                         identifier_fields_start = result.start("fields")
@@ -1758,7 +1734,7 @@ class GtkDocCommentBlockParser(object):
                                         "delimiter"
                                     )
                                     warn(
-                                        'missing ":" at column %s:' % (marker_pos + 1,),
+                                        f'missing ":" at column {marker_pos + 1}:',
                                         position,
                                         None,
                                         marker_pos,
@@ -1792,7 +1768,7 @@ class GtkDocCommentBlockParser(object):
 
                 if in_part not in [PART_IDENTIFIER, PART_PARAMETERS]:
                     warn(
-                        '"@%s" parameter unexpected at this location:' % (param_name,),
+                        f'"@{param_name}" parameter unexpected at this location:',
                         position,
                         None,
                         marker_pos,
@@ -1809,8 +1785,7 @@ class GtkDocCommentBlockParser(object):
                         returns_seen = True
                     else:
                         error(
-                            'encountered multiple "Returns" parameters or tags for "%s".'
-                            % (comment_block.name,),
+                            f'encountered multiple "Returns" parameters or tags for "{comment_block.name}".',
                             position,
                         )
 
@@ -1834,8 +1809,7 @@ class GtkDocCommentBlockParser(object):
                 ):
                     # Deprecated @Varargs notation or named __VA_ARGS__ instead of @...
                     warn(
-                        '"@%s" parameter is deprecated, please use "@..." instead:'
-                        % (param_name,),
+                        f'"@{param_name}" parameter is deprecated, please use "@..." instead:',
                         position,
                         None,
                         marker_pos,
@@ -1845,8 +1819,7 @@ class GtkDocCommentBlockParser(object):
 
                 if param_name in comment_block.params.keys():
                     error(
-                        'multiple "@%s" parameters for identifier "%s":'
-                        % (param_name, comment_block.name),
+                        f'multiple "@{param_name}" parameters for identifier "{comment_block.name}":',
                         position,
                         None,
                         marker_pos,
@@ -1906,9 +1879,9 @@ class GtkDocCommentBlockParser(object):
                     # Emit a warning and transform these into annotations on the identifier
                     # instead, as agreed upon in http://bugzilla.gnome.org/show_bug.cgi?id=676133
                     warn(
-                        'GObject-Introspection specific GTK-Doc tag "%s" '
+                        f'GObject-Introspection specific GTK-Doc tag "{tag_name}" '
                         "has been deprecated, please use annotations on the identifier "
-                        "instead:" % (tag_name,),
+                        "instead:",
                         position,
                         None,
                         marker_pos,
@@ -1937,16 +1910,9 @@ class GtkDocCommentBlockParser(object):
                                 )
                                 n_options = len(ann_options)
                                 if n_options == 1:
-                                    transformed = "%s %s" % (
-                                        transformed,
-                                        ann_options[0],
-                                    )
+                                    transformed = f"{transformed} {ann_options[0]}"
                                 elif n_options == 2:
-                                    transformed = "%s %s=%s" % (
-                                        transformed,
-                                        ann_options[0],
-                                        ann_options[1],
-                                    )
+                                    transformed = f"{transformed} {ann_options[0]}={ann_options[1]}"
                                 else:
                                     # Malformed Attributes: tag
                                     error(
@@ -1959,7 +1925,7 @@ class GtkDocCommentBlockParser(object):
                                     transformed = None
 
                             if transformed:
-                                transformed = "%s %s" % (ann_name, transformed.strip())
+                                transformed = f"{ann_name} {transformed.strip()}"
                                 ann_name, docannotation = self._parse_annotation(
                                     position,
                                     column_offset + tag_fields_start,
@@ -1985,7 +1951,7 @@ class GtkDocCommentBlockParser(object):
                             position,
                             column_offset + tag_fields_start,
                             line,
-                            "%s %s" % (ann_name, tag_fields),
+                            f"{ann_name} {tag_fields}",
                         )
                         comment_block.annotations[ann_name] = options
 
@@ -2005,7 +1971,7 @@ class GtkDocCommentBlockParser(object):
                     if comment_block.description is None:
                         comment_block.description = tag_fields
                     else:
-                        comment_block.description += "\n%s" % (tag_fields,)
+                        comment_block.description += f"\n{tag_fields}"
                     continue
 
                 # Now that the deprecated stuff is out of the way, continue parsing real tags
@@ -2023,7 +1989,7 @@ class GtkDocCommentBlockParser(object):
                 if in_part != PART_TAGS:
                     in_part = PART_TAGS
                     warn(
-                        '"%s:" tag unexpected at this location:' % (tag_name,),
+                        f'"{tag_name}:" tag unexpected at this location:',
                         position,
                         None,
                         marker_pos,
@@ -2040,8 +2006,7 @@ class GtkDocCommentBlockParser(object):
                         returns_seen = True
                     else:
                         error(
-                            'encountered multiple return value parameters or tags for "%s".'
-                            % (comment_block.name,),
+                            f'encountered multiple return value parameters or tags for "{comment_block.name}".',
                             position,
                         )
 
@@ -2064,8 +2029,7 @@ class GtkDocCommentBlockParser(object):
                 else:
                     if tag_name_lower in comment_block.tags.keys():
                         error(
-                            'multiple "%s:" tags for identifier "%s":'
-                            % (tag_name, comment_block.name),
+                            f'multiple "{tag_name}:" tags for identifier "{comment_block.name}":',
                             position,
                             None,
                             marker_pos,
@@ -2084,8 +2048,7 @@ class GtkDocCommentBlockParser(object):
                         if result.success:
                             if result.annotations:
                                 error(
-                                    'annotations not supported for tag "%s:".'
-                                    % (tag_name,),
+                                    f'annotations not supported for tag "{tag_name}:".',
                                     position,
                                 )
 
@@ -2312,8 +2275,7 @@ class GtkDocCommentBlockParser(object):
 
         if ann_name == ANN_INOUT_ALT:
             warn(
-                '"%s" annotation has been deprecated, please use "%s" instead:'
-                % (ANN_INOUT_ALT, ANN_INOUT),
+                f'"{ANN_INOUT_ALT}" annotation has been deprecated, please use "{ANN_INOUT}" instead:',
                 position,
                 None,
                 column,
@@ -2323,8 +2285,7 @@ class GtkDocCommentBlockParser(object):
             ann_name = ANN_INOUT
         elif ann_name == ANN_ATTRIBUTE:
             warn(
-                '"%s" annotation has been deprecated, please use "%s" instead:'
-                % (ANN_ATTRIBUTE, ANN_ATTRIBUTES),
+                f'"{ANN_ATTRIBUTE}" annotation has been deprecated, please use "{ANN_ATTRIBUTES}" instead:',
                 position,
                 None,
                 column,
@@ -2339,7 +2300,7 @@ class GtkDocCommentBlockParser(object):
             if n_options == 1:
                 ann_options = ann_options[0]
             elif n_options == 2:
-                ann_options = "%s=%s" % (ann_options[0], ann_options[1])
+                ann_options = f"{ann_options[0]}={ann_options[1]}"
             else:
                 error(
                     'malformed "(attribute)" annotation will be ignored:',
@@ -2456,7 +2417,7 @@ class GtkDocCommentBlockParser(object):
                         if name is not None:
                             if name in parsed_annotations:
                                 error(
-                                    'multiple "%s" annotations:' % (name,),
+                                    f'multiple "{name}" annotations:',
                                     position,
                                     None,
                                     column + i,
@@ -2540,7 +2501,7 @@ class GtkDocCommentBlockParser(object):
                     if result.end_pos > 0:
                         marker_pos = column + result.end_pos
                         warn(
-                            'missing ":" at column %s:' % (marker_pos + 1,),
+                            f'missing ":" at column {marker_pos + 1}:',
                             position,
                             None,
                             marker_pos,

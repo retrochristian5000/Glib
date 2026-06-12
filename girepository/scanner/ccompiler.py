@@ -150,7 +150,7 @@ def resolve_mingw_lib(implib, libtool=None):
 FLAGS_RETAINING_MACROS = ["-g3", "-ggdb3", "-gstabs3", "-gcoff3", "-gxcoff3", "-gvms3"]
 
 
-class CCompiler(object):
+class CCompiler:
     compiler_cmd = ""
     compiler = None
     _cflags_no_deprecation_warnings = ""
@@ -172,7 +172,7 @@ class CCompiler(object):
                     compiler_name = distutils.ccompiler.get_default_compiler()
             if compiler_name != "msvc" and compiler_name != "mingw32":
                 raise SystemExit(
-                    "Specified Compiler '%s' is unsupported." % compiler_name
+                    f"Specified Compiler '{compiler_name}' is unsupported."
                 )
         else:
             if compiler_name is None:
@@ -450,12 +450,12 @@ class CCompiler(object):
         for lib in libraries:
             found = False
             candidates = [
-                "lib%s.dll.a" % lib,
-                "lib%s.dll.lib" % lib,  # rust cdylib
-                "lib%s.a" % lib,
-                "%s.dll.a" % lib,
-                "%s.a" % lib,
-                "%s.lib" % lib,
+                f"lib{lib}.dll.a",
+                f"lib{lib}.dll.lib",  # rust cdylib
+                f"lib{lib}.a",
+                f"{lib}.dll.a",
+                f"{lib}.a",
+                f"{lib}.lib",
             ]
             for searchdir in libsearch:
                 if found:

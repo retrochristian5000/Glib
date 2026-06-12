@@ -121,7 +121,7 @@ def ctype_name(ctype):
     }.get(ctype)
 
 
-class SourceType(object):
+class SourceType:
     __members__ = [
         "type",
         "base_type",
@@ -137,11 +137,7 @@ class SourceType(object):
         self._stype = stype
 
     def __repr__(self):
-        return "<%s type='%s' name='%s'>" % (
-            self.__class__.__name__,
-            ctype_name(self.type),
-            self.name,
-        )
+        return f"<{self.__class__.__name__} type='{ctype_name(self.type)}' name='{self.name}'>"
 
     @property
     def type(self):
@@ -176,7 +172,7 @@ class SourceType(object):
         return self._stype.function_specifier
 
 
-class SourceSymbol(object):
+class SourceSymbol:
     __members__ = [
         "const_int",
         "const_double",
@@ -196,13 +192,8 @@ class SourceSymbol(object):
         if src:
             line = self.line
             if line:
-                src += ":'%s'" % (line,)
-        return "<%s type='%s' ident='%s' src='%s'>" % (
-            self.__class__.__name__,
-            symbol_type_name(self.type),
-            self.ident,
-            src,
-        )
+                src += f":'{line}'"
+        return f"<{self.__class__.__name__} type='{symbol_type_name(self.type)}' ident='{self.ident}' src='{src}'>"
 
     @property
     def const_int(self):
@@ -250,7 +241,7 @@ class SourceSymbol(object):
         return Position(self._symbol.source_filename, self._symbol.line)
 
 
-class SourceScanner(object):
+class SourceScanner:
     def __init__(self):
         self._scanner = CSourceScanner()
         self._filenames = []
@@ -345,10 +336,10 @@ class SourceScanner(object):
     def _write_preprocess_src(self, fp, defines, undefs, filenames):
         # Write to the temp file for feeding into the preprocessor
         for define in defines:
-            fp.write(("#ifndef %s\n" % (define,)).encode())
-            fp.write(("# define %s\n" % (define,)).encode())
-            fp.write("#endif\n".encode())
+            fp.write((f"#ifndef {define}\n").encode())
+            fp.write((f"# define {define}\n").encode())
+            fp.write(b"#endif\n")
         for undef in undefs:
-            fp.write(("#undef %s\n" % (undef,)).encode())
+            fp.write((f"#undef {undef}\n").encode())
         for filename in filenames:
-            fp.write(("#include <%s>\n" % (filename,)).encode())
+            fp.write((f"#include <{filename}>\n").encode())

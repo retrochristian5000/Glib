@@ -77,7 +77,7 @@ from .annotationparser import (
 from .utils import to_underscores_noprefix
 
 
-class MainTransformer(object):
+class MainTransformer:
     def __init__(self, transformer, blocks):
         self._transformer = transformer
         self._blocks = blocks
@@ -183,14 +183,13 @@ class MainTransformer(object):
             param = None
         if param is None:
             if isinstance(origin, girast.Parameter):
-                origin_name = "parameter %s" % (origin.argname,)
+                origin_name = f"parameter {origin.argname}"
             else:
                 origin_name = "return value"
             message.log_node(
                 message.FATAL,
                 parent,
-                "can't find parameter %s referenced by %s of '%s'"
-                % (param_name, origin_name, parent.name),
+                f"can't find parameter {param_name} referenced by {origin_name} of '{parent.name}'",
             )
 
         return param.argname
@@ -201,12 +200,11 @@ class MainTransformer(object):
         except ValueError:
             field = None
         if field is None:
-            origin_name = "field %s" % (origin.name,)
+            origin_name = f"field {origin.name}"
             message.log_node(
                 message.FATAL,
                 parent,
-                "can't find field %s referenced by %s of '%s'"
-                % (field_name, origin_name, parent.name),
+                f"can't find field {field_name} referenced by {origin_name} of '{parent.name}'",
             )
 
         return field.name
@@ -222,20 +220,19 @@ class MainTransformer(object):
         if not target:
             message.warn_node(
                 node,
-                "Can't find symbol '%s' referenced by \"rename-to\" annotation"
-                % (rename_to,),
+                f"Can't find symbol '{rename_to}' referenced by \"rename-to\" annotation",
             )
         elif target.shadowed_by:
             message.warn_node(
                 node,
-                "Function '%s' already shadowed by '%s', can't overwrite "
-                "with '%s'" % (target.symbol, target.shadowed_by, rename_to),
+                f"Function '{target.symbol}' already shadowed by '{target.shadowed_by}', can't overwrite "
+                f"with '{rename_to}'",
             )
         elif target.shadows:
             message.warn_node(
                 node,
-                "Function '%s' already shadows '%s', can't multiply shadow "
-                "with '%s'" % (target.symbol, target.shadows, rename_to),
+                f"Function '{target.symbol}' already shadows '{target.shadows}', can't multiply shadow "
+                f"with '{rename_to}'",
             )
         else:
             target.shadowed_by = node.name
@@ -253,8 +250,8 @@ class MainTransformer(object):
         if ANN_NULLABLE in annotations:
             message.strict_node(
                 node,
-                '"nullable" annotation on instance parameter of {0}: did you '
-                "really intend that?".format(node.symbol),
+                f'"nullable" annotation on instance parameter of {node.symbol}: '
+                "did you really intend that?",
             )
 
         if (
@@ -264,11 +261,9 @@ class MainTransformer(object):
         ):
             message.strict_node(
                 node,
-                '"transfer" annotation of "{0}" on instance parameter of '
-                "{1}: should not be applied to a method's instance "
-                "parameter unless this is a free() or destroy() method".format(
-                    transfer, node.symbol
-                ),
+                f'"transfer" annotation of "{transfer}" on instance parameter of '
+                f"{node.symbol}: should not be applied to a method's instance "
+                "parameter unless this is a free() or destroy() method",
             )
 
     def _apply_annotations_function(self, node, chain):
@@ -323,7 +318,7 @@ class MainTransformer(object):
             elif isinstance(node, girast.Registered) and node.gtype_name is not None:
                 return node.gtype_name
             return node.c_name
-        raise AssertionError("Unhandled node '%s'" % (node,))
+        raise AssertionError(f"Unhandled node '{node}'")
 
     def _get_block(self, node):
         return self._blocks.get(self._get_annotation_name(node))
@@ -360,7 +355,7 @@ class MainTransformer(object):
             for field in node.fields:
                 self._apply_annotations_field(node, block, field)
             name = self._get_annotation_name(node)
-            section_name = "SECTION:%s" % (name.lower(),)
+            section_name = f"SECTION:{name.lower()}"
             # We pop it from our blocks so that we can serialize leftover
             # SECTIONs as standalone nodes
             block = self._blocks.pop(section_name, None)
@@ -433,7 +428,7 @@ class MainTransformer(object):
                 return base
             elif isinstance(base, girast.Map) and len(rest) == 2:
                 return girast.Map(*rest)
-            message.warn("Too many parameters in type specification '%s'" % (type_str,))
+            message.warn(f"Too many parameters in type specification '{type_str}'")
             return base
 
         def top_combiner(base, *rest):
@@ -443,7 +438,7 @@ class MainTransformer(object):
 
         result, rest = grab_one(type_str, resolver, top_combiner, combiner)
         if rest:
-            message.warn("Trailing components in type specification '%s'" % (type_str,))
+            message.warn(f"Trailing components in type specification '{type_str}'")
 
         if not result.resolved:
             position = None
@@ -453,7 +448,7 @@ class MainTransformer(object):
             else:
                 text = type_str
             message.warn_node(
-                parent, "%s: Unknown type: '%s'" % (text, type_str), positions=position
+                parent, f"{text}: Unknown type: '{type_str}'", positions=position
             )
         return result
 
@@ -584,7 +579,7 @@ class MainTransformer(object):
             if len(element_type_options) != 1:
                 message.warn(
                     '"element-type" annotation for a list must have exactly '
-                    "one option, not %d options" % (len(element_type_options),),
+                    f"one option, not {len(element_type_options)} options",
                     annotations.position,
                 )
                 return
@@ -595,7 +590,7 @@ class MainTransformer(object):
             if len(element_type_options) != 2:
                 message.warn(
                     '"element-type" annotation for a hash table must have exactly '
-                    "two options, not %d option(s)" % (len(element_type_options),),
+                    f"two options, not {len(element_type_options)} option(s)",
                     annotations.position,
                 )
                 return
@@ -609,7 +604,7 @@ class MainTransformer(object):
             if len(element_type_options) != 1:
                 message.warn(
                     '"element-type" annotation for an array must have exactly '
-                    "one option, not %d options" % (len(element_type_options),),
+                    f"one option, not {len(element_type_options)} options",
                     annotations.position,
                 )
                 return
@@ -618,7 +613,7 @@ class MainTransformer(object):
             )
         else:
             message.warn(
-                "Unknown container %r for element-type annotation" % (node.type,),
+                f"Unknown container {node.type!r} for element-type annotation",
                 annotations.position,
             )
 
@@ -757,8 +752,8 @@ class MainTransformer(object):
                 and node_type.target_giname != "GObject.Closure"
             ):
                 message.warn(
-                    'invalid "transfer" annotation for {0}: '
-                    "only valid for object, GVariant and GClosure types".format(target),
+                    f'invalid "transfer" annotation for {target}: '
+                    "only valid for object, GVariant and GClosure types",
                     annotations.position,
                 )
                 return
@@ -768,8 +763,8 @@ class MainTransformer(object):
                 target, (girast.Array, girast.List, girast.Map)
             ):
                 message.warn(
-                    'invalid "transfer" annotation for {0}: '
-                    "only valid for container types".format(target),
+                    f'invalid "transfer" annotation for {target}: '
+                    "only valid for container types",
                     annotations.position,
                 )
                 return
@@ -792,9 +787,9 @@ class MainTransformer(object):
             )
         ):
             message.warn(
-                'invalid "transfer" annotation for {0}: '
+                f'invalid "transfer" annotation for {target}: '
                 "only valid for array, struct, union, boxed, "
-                "object and interface types".format(target),
+                "object and interface types",
                 annotations.position,
             )
             return
@@ -1072,13 +1067,13 @@ class MainTransformer(object):
             tag = None
 
         if tag is not None and return_.type == girast.TYPE_NONE:
-            message.warn("%s: invalid return annotation" % (block.name,), tag.position)
+            message.warn(f"{block.name}: invalid return annotation", tag.position)
             tag = None
 
         self._apply_annotations_param_ret_common(parent, return_, tag)
 
     def _apply_annotations_params(self, parent, params, block):
-        declparams = set([])
+        declparams = set()
         if parent.instance_parameter:
             if block:
                 doc_param = block.params.get(parent.instance_parameter.argname)
@@ -1109,16 +1104,15 @@ class MainTransformer(object):
                 text = ""
             elif len(unused) == 1:
                 (param,) = unused
-                text = ", should be '%s'" % (param,)
+                text = f", should be '{param}'"
             else:
-                text = ", should be one of %s" % (
-                    ", ".join("'%s'" % p for p in sorted(unused)),
-                )
+                poss = ", ".join(f"'{p}'" for p in sorted(unused))
+                text = f", should be one of {poss}"
 
             param = block.params.get(doc_name)
             message.warn(
-                "%s: unknown parameter '%s' in documentation "
-                "comment%s" % (block.name, doc_name, text),
+                f"{block.name}: unknown parameter '{doc_name}' in documentation "
+                f"comment{text}",
                 param.position,
             )
 
@@ -1140,9 +1134,7 @@ class MainTransformer(object):
         self._apply_annotations_return(node, node.retval, block)
 
     def _apply_annotations_field(self, parent, parent_block, field):
-        block = self._blocks.get(
-            "%s.%s" % (self._get_annotation_name(parent), field.name)
-        )
+        block = self._blocks.get(f"{self._get_annotation_name(parent)}.{field.name}")
 
         # Prioritize block level documentation
         if block:
@@ -1170,7 +1162,7 @@ class MainTransformer(object):
 
     def _apply_annotations_property(self, parent, prop):
         prefix = self._get_annotation_name(parent)
-        block = self._blocks.get("%s:%s" % (prefix, prop.name))
+        block = self._blocks.get(f"{prefix}:{prop.name}")
         self._apply_annotations_annotated(prop, block)
         if not block:
             return
@@ -1200,7 +1192,7 @@ class MainTransformer(object):
     def _apply_annotations_signal(self, parent, signal):
         names = []
         prefix = self._get_annotation_name(parent)
-        block = self._blocks.get("%s::%s" % (prefix, signal.name))
+        block = self._blocks.get(f"{prefix}::{signal.name}")
 
         if block:
             self._apply_annotations_annotated(signal, block)
@@ -1292,8 +1284,7 @@ class MainTransformer(object):
                     if not matched:
                         message.warn_node(
                             node,
-                            "Virtual slot '%s' not found for '%s' annotation"
-                            % (invoker_name, ANN_VFUNC),
+                            f"Virtual slot '{invoker_name}' not found for '{ANN_VFUNC}' annotation",
                         )
         return True
 
@@ -1381,7 +1372,7 @@ class MainTransformer(object):
             else:
                 message.warn_node(
                     node,
-                    """%s: Couldn't find corresponding enumeration""" % (node.symbol,),
+                    f"""{node.symbol}: Couldn't find corresponding enumeration""",
                 )
 
     def _split_uscored_by_type(self, uscored):
@@ -1433,9 +1424,7 @@ class MainTransformer(object):
     def _is_method(self, func, subsymbol):
         if not func.parameters:
             if func.is_method:
-                message.warn_node(
-                    func, "%s: Methods must have parameters" % (func.symbol,)
-                )
+                message.warn_node(func, f"{func.symbol}: Methods must have parameters")
             return False
         first = func.parameters[0]
         target = self._transformer.lookup_typenode(first.type)
@@ -1446,16 +1435,14 @@ class MainTransformer(object):
             if func.is_method:
                 message.warn_node(
                     func,
-                    "%s: Methods must have a pointer as their first "
-                    "parameter" % (func.symbol,),
+                    f"{func.symbol}: Methods must have a pointer as their first parameter",
                 )
             return False
         if target.namespace != self._namespace:
             if func.is_method:
                 message.warn_node(
                     func,
-                    "%s: Methods must belong to the same namespace as the "
-                    "class they belong to" % (func.symbol,),
+                    f"{func.symbol}: Methods must belong to the same namespace as the class they belong to",
                 )
             return False
         if first.direction in (
@@ -1465,8 +1452,7 @@ class MainTransformer(object):
             if func.is_method:
                 message.error_node(
                     func,
-                    "%s: The first argument of a method cannot be an "
-                    "%s-argument" % (func.symbol, first.direction),
+                    f"{func.symbol}: The first argument of a method cannot be an {first.direction}-argument",
                 )
             return False
 
@@ -1655,8 +1641,7 @@ class MainTransformer(object):
             if func.is_constructor:
                 message.warn_node(
                     func,
-                    "%s: Constructors must return an instance of their class"
-                    % (func.symbol,),
+                    f"{func.symbol}: Constructors must return an instance of their class",
                 )
             return False
 
@@ -1665,8 +1650,7 @@ class MainTransformer(object):
             if func.is_constructor:
                 message.warn_node(
                     func,
-                    "Can't find matching type for constructor; symbol='%s'"
-                    % (func.symbol,),
+                    f"Can't find matching type for constructor; symbol='{func.symbol}'",
                 )
             return False
 
@@ -1684,8 +1668,7 @@ class MainTransformer(object):
             if func.is_constructor:
                 message.warn_node(
                     func,
-                    "%s: Constructors must belong to the same namespace as the "
-                    "class they belong to" % (func.symbol,),
+                    f"{func.symbol}: Constructors must belong to the same namespace as the class they belong to",
                 )
             return False
         # If it takes the object as a first arg, guess it's not a constructor
@@ -1707,25 +1690,15 @@ class MainTransformer(object):
                     message.warn_node(
                         func,
                         "Return value is not superclass for constructor; "
-                        "symbol='%s' constructed='%s' return='%s'"
-                        % (
-                            func.symbol,
-                            str(origin_node.create_type()),
-                            str(func.retval.type),
-                        ),
+                        f"symbol='{func.symbol}' constructed='{origin_node.create_type()}' return='{func.retval.type}'",
                     )
                     return False
         else:
             if origin_node != target:
                 message.warn_node(
                     func,
-                    "Constructor return type mismatch symbol='%s' "
-                    "constructed='%s' return='%s'"
-                    % (
-                        func.symbol,
-                        str(origin_node.create_type()),
-                        str(func.retval.type),
-                    ),
+                    f"Constructor return type mismatch symbol='{func.symbol}' "
+                    f"constructed='{origin_node.create_type()}' return='{func.retval.type}'",
                 )
                 return False
 
@@ -1736,7 +1709,7 @@ class MainTransformer(object):
         if not node.glib_type_struct:
             # https://bugzilla.gnome.org/show_bug.cgi?id=629080
             # message.warn_node(node,
-            #    "Failed to find class structure for '%s'" % (node.name, ))
+            #    f"Failed to find class structure for '{node.name}'")
             return
 
         node_type = node.create_type()
@@ -1773,7 +1746,7 @@ class MainTransformer(object):
             prefix = self._get_annotation_name(class_struct)
             # Prefer full docblocks, but fall back to the field description
             # if there isn't a full one, to avoid an undocumented symbol
-            block = self._blocks.get("%s::%s" % (prefix, vfunc.name))
+            block = self._blocks.get(f"{prefix}::{vfunc.name}")
             if block is None:
                 vfunc.doc = field.doc
                 vfunc.doc_position = field.doc_position
@@ -1844,9 +1817,8 @@ class MainTransformer(object):
                     elif method.set_property != prop.name:
                         message.warn_node(
                             method,
-                            "Setter method '%s' for property '%s' has a "
-                            "mismatched '(set-property %s)' annotation"
-                            % (method.symbol, prop.name, method.set_property),
+                            f"Setter method '{method.symbol}' for property '{prop.name}' has a "
+                            f"mismatched '(set-property {method.set_property})' annotation",
                         )
                         method.set_property = prop.name
                     prop.setter = method.name
@@ -1858,9 +1830,8 @@ class MainTransformer(object):
                     elif method.get_property != prop.name:
                         message.warn_node(
                             method,
-                            "Getter method '%s' for property '%s' has a "
-                            "mismatched '(get-property %s)' annotation"
-                            % (method.symbol, prop.name, method.get_property),
+                            f"Getter method '{method.symbol}' for property '{prop.name}' has a "
+                            f"mismatched '(get-property {method.get_property})' annotation",
                         )
                         method.get_property = prop.name
                     # Check the priority of the last matching getter
@@ -1934,8 +1905,7 @@ class MainTransformer(object):
                 else:
                     message.warn_node(
                         node,
-                        "Couldn't find '%s' for the corresponding async function: '%s'"
-                        % (func_name, node.name),
+                        f"Couldn't find '{func_name}' for the corresponding async function: '{node.name}'",
                     )
 
     def _pass3_callable_async_sync(self, node):
@@ -2011,8 +1981,7 @@ class MainTransformer(object):
             if not found_finish_method:
                 message.warn_node(
                     method,
-                    "Couldn't find '%s' for the corresponding async function: '%s'"
-                    % (func_name, method.name),
+                    f"Couldn't find '{func_name}' for the corresponding async function: '{method.name}'",
                 )
 
     def _match_class_sync_methods(self, methods):

@@ -218,7 +218,7 @@ def get_user_cache_dir(dir=None):
             xdg_cache_home = os.path.join(xdg_cache_home, dir)
         try:
             os.makedirs(xdg_cache_home, mode=0o755, exist_ok=True)
-        except EnvironmentError:
+        except OSError:
             # Let's fall back to ~/.cache below
             pass
         else:
@@ -231,7 +231,7 @@ def get_user_cache_dir(dir=None):
             cachedir = os.path.join(cachedir, dir)
         try:
             os.makedirs(cachedir, mode=0o755, exist_ok=True)
-        except EnvironmentError:
+        except OSError:
             return None
         else:
             return cachedir
@@ -250,7 +250,7 @@ def get_user_data_dir():
     if xdg_data_home is not None:
         try:
             os.makedirs(xdg_data_home, mode=0o700, exist_ok=True)
-        except EnvironmentError:
+        except OSError:
             # Let's fall back to ~/.local/share below
             pass
         else:
@@ -261,7 +261,7 @@ def get_user_data_dir():
         datadir = os.path.join(homedir, ".local", "share")
         try:
             os.makedirs(datadir, mode=0o700, exist_ok=True)
-        except EnvironmentError:
+        except OSError:
             return None
         else:
             return datadir
@@ -315,7 +315,7 @@ class Singleton(type):
 
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+            cls._instances[cls] = super().__call__(*args, **kwargs)
         return cls._instances[cls]
 
 

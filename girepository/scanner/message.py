@@ -30,7 +30,7 @@ from .utils import break_on_debug_flag
 WARNING, ERROR, FATAL = range(3)
 
 
-class Position(object):
+class Position:
     """
     Represents a position in the source file which we
     want to inform about.
@@ -72,11 +72,7 @@ class Position(object):
         return hash((self.filename, self.line, self.column))
 
     def __repr__(self):
-        return "<Position %s:%d:%d>" % (
-            os.path.basename(self.filename),
-            self.line or -1,
-            self.column or -1,
-        )
+        return f"<Position {os.path.basename(self.filename)}:{self.line or -1}:{self.column or -1}>"
 
     def format(self, cwd):
         # Windows: We may be using different drives self.filename and cwd,
@@ -90,17 +86,14 @@ class Position(object):
             filename = os.path.realpath(self.filename)
 
         if self.column is not None:
-            return "%s:%d:%d" % (filename, self.line, self.column)
+            return f"{filename}:{self.line}:{self.column}"
         elif self.line is not None:
-            return "%s:%d" % (
-                filename,
-                self.line,
-            )
+            return f"{filename}:{self.line}"
         else:
-            return "%s:" % (filename,)
+            return f"{filename}:"
 
 
-class MessageLogger(object):
+class MessageLogger:
     _instance = None
 
     def __init__(self, namespace=None, output=None):
@@ -165,7 +158,7 @@ class MessageLogger(object):
             positions = [Position("<unknown>")]
 
         for position in positions[:-1]:
-            self._output.write("%s:\n" % (position.format(cwd=self._cwd),))
+            self._output.write(f"{position.format(cwd=self._cwd)}:\n")
         last_position = positions[-1].format(cwd=self._cwd)
 
         if log_type == WARNING:
@@ -176,11 +169,11 @@ class MessageLogger(object):
             error_type = "Fatal"
 
         if marker_pos is not None and marker_line is not None:
-            text = "%s\n%s\n%s" % (text, marker_line, " " * marker_pos + "^")
+            text = f"{text}\n{marker_line}\n{' ' * marker_pos + '^'}"
 
         if prefix:
             if self._namespace:
-                text = "%s: %s: %s: %s: %s\n" % (
+                text = "{}: {}: {}: {}: {}\n".format(
                     last_position,
                     error_type,
                     self._namespace.name,
@@ -188,17 +181,17 @@ class MessageLogger(object):
                     text,
                 )
             else:
-                text = "%s: %s: %s: %s\n" % (last_position, error_type, prefix, text)
+                text = f"{last_position}: {error_type}: {prefix}: {text}\n"
         else:
             if self._namespace:
-                text = "%s: %s: %s: %s\n" % (
+                text = "{}: {}: {}: {}\n".format(
                     last_position,
                     error_type,
                     self._namespace.name,
                     text,
                 )
             else:
-                text = "%s: %s: %s\n" % (last_position, error_type, text)
+                text = f"{last_position}: {error_type}: {text}\n"
 
         self._output.write(text)
 
@@ -224,17 +217,15 @@ class MessageLogger(object):
             positions = set()
 
         if context:
-            text = "%s: %s" % (getattr(context, "symbol", context.name), text)
+            text = f"{getattr(context, 'symbol', context.name)}: {text}"
         elif not positions and hasattr(node, "name"):
-            text = "(%s)%s: %s" % (node.__class__.__name__, node.name, text)
+            text = f"({node.__class__.__name__}){node.name}: {text}"
 
         self.log(log_type, text, positions)
 
     def log_symbol(self, log_type, symbol, text):
         """Log a warning in the context of the given symbol."""
-        self.log(
-            log_type, text, symbol.position, prefix="symbol='%s'" % (symbol.ident,)
-        )
+        self.log(log_type, text, symbol.position, prefix=f"symbol='{symbol.ident}'")
 
 
 def log_node(log_type, node, text, context=None, positions=None):

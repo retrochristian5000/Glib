@@ -43,7 +43,7 @@ G_PARAM_STATIC_NICK = 1 << 6
 G_PARAM_STATIC_BLURB = 1 << 7
 
 
-class IntrospectionBinary(object):
+class IntrospectionBinary:
     def __init__(self, args, tmpdir=None):
         self.args = args
         if tmpdir is None:
@@ -52,7 +52,7 @@ class IntrospectionBinary(object):
             self.tmpdir = tmpdir
 
 
-class Unresolved(object):
+class Unresolved:
     def __init__(self, target):
         self.target = target
 
@@ -61,7 +61,7 @@ class UnknownTypeError(Exception):
     pass
 
 
-class GDumpParser(object):
+class GDumpParser:
     def __init__(self, transformer):
         self._transformer = transformer
         self._namespace = transformer.namespace
@@ -165,7 +165,7 @@ class GDumpParser(object):
             args.extend(launcher.split())
 
         args.extend(self._binary.args)
-        args.append("--introspect-dump=%s,%s" % (in_path, out_path))
+        args.append(f"--introspect-dump={in_path},{out_path}")
 
         # Invoke the binary, having written our get_type functions to types.txt
         try:
@@ -262,7 +262,7 @@ class GDumpParser(object):
         elif xmlnode.tag == "fundamental":
             self._introspect_fundamental(xmlnode)
         else:
-            raise ValueError("Unhandled introspection XML tag %s", xmlnode.tag)
+            raise ValueError(f"Unhandled introspection XML tag {xmlnode.tag}")
 
     def _introspect_enum(self, xmlnode):
         type_name = xmlnode.attrib["name"]
@@ -325,12 +325,11 @@ class GDumpParser(object):
         assert ns is self._namespace
         if name in ("get_type", "_get_gtype"):
             message.fatal(
-                """The GObject name '%s' isn't compatible
-with the configured identifier prefixes:
-  %r
-The class would have no name.  Most likely you want to specify a
-different --identifier-prefix."""
-                % (xmlnode.attrib["name"], self._namespace.identifier_prefixes)
+                f"The GObject name '{xmlnode.attrib['name']}' isn't compatible"
+                "with the configured identifier prefixes:"
+                f"  {self._namespace.identifier_prefixes!r}"
+                "The class would have no name.  Most likely you want to specify a"
+                "different --identifier-prefix."
             )
         if name.endswith("_get_type"):
             type_suffix = "_get_type"
@@ -389,7 +388,7 @@ different --identifier-prefix."""
             node.ctype = record.ctype
         else:
             message.warn_node(
-                node, "Couldn't find associated structure for '%s'" % (node.name,)
+                node, f"Couldn't find associated structure for '{node.name}'"
             )
 
         # GtkFileChooserEmbed is an example of a private interface, we
@@ -492,7 +491,7 @@ different --identifier-prefix."""
                 if i == 0:
                     argname = "object"
                 else:
-                    argname = "p%s" % (i - 1,)
+                    argname = f"p{i - 1}"
                 pctype = parameter.attrib["type"]
                 ptype = girast.Type.create_from_gtype_name(pctype)
                 param = girast.Parameter(argname, ptype)

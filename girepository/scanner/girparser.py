@@ -36,22 +36,22 @@ GLIB_NS = "http://www.gtk.org/introspection/glib/1.0"
 
 
 def _corens(tag):
-    return "{%s}%s" % (CORE_NS, tag)
+    return f"{{{CORE_NS}}}{tag}"
 
 
 def _glibns(tag):
-    return "{%s}%s" % (GLIB_NS, tag)
+    return f"{{{GLIB_NS}}}{tag}"
 
 
 def _cns(tag):
-    return "{%s}%s" % (C_NS, tag)
+    return f"{{{C_NS}}}{tag}"
 
 
 def _docns(tag):
-    return "{%s}%s" % (DOC_NS, tag)
+    return f"{{{DOC_NS}}}{tag}"
 
 
-class GIRParser(object):
+class GIRParser:
     def __init__(self, types_only=False):
         self._types_only = types_only
         self._namespace = None
@@ -403,7 +403,7 @@ class GIRParser(object):
         name = node.attrib["name"]
         returnnode = node.find(_corens("return-value"))
         if not returnnode:
-            raise ValueError("node %r has no return-value" % (name,))
+            raise ValueError(f"node {name!r} has no return-value")
         transfer = returnnode.attrib.get("transfer-ownership")
         nullable = returnnode.attrib.get("nullable") == "1"
         retval = girast.Return(self._parse_type(returnnode), nullable, False, transfer)

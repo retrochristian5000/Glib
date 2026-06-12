@@ -57,8 +57,8 @@ def collect_attributes(tag_name, attributes, self_indent, self_indent_char, inde
         if value is None:
             continue
         if indent_len and not first:
-            attr_value += "\n%s" % (self_indent_char * indent_len)
-        attr_value += " %s=%s" % (attr, quoteattr(value))
+            attr_value += f"\n{self_indent_char * indent_len}"
+        attr_value += f" {attr}={quoteattr(value)}"
         if first:
             first = False
     return attr_value
@@ -69,11 +69,11 @@ def build_xml_tag(
 ):
     if attributes is None:
         attributes = []
-    prefix = "<%s" % (tag_name,)
+    prefix = f"<{tag_name}"
     if data is not None:
         if isinstance(data, bytes):
             data = data.decode("UTF-8")
-        suffix = ">%s</%s>" % (escape(data), tag_name)
+        suffix = f">{escape(data)}</{tag_name}>"
     else:
         suffix = "/>"
     attrs = collect_attributes(
@@ -82,7 +82,7 @@ def build_xml_tag(
     return prefix + attrs + suffix
 
 
-class XMLWriter(object):
+class XMLWriter:
     def __init__(self):
         # Build up the XML buffer as unicode strings. When writing to disk,
         # we can assume the lack of a Byte Order Mark (BOM) and lack
@@ -103,10 +103,10 @@ class XMLWriter(object):
         attrs = collect_attributes(
             tag_name, attributes, self._indent, self._indent_char, len(tag_name) + 2
         )
-        self.write_line("<%s%s>" % (tag_name, attrs))
+        self.write_line(f"<{tag_name}{attrs}>")
 
     def _close_tag(self, tag_name):
-        self.write_line("</%s>" % (tag_name,))
+        self.write_line(f"</{tag_name}>")
 
     # Public API
 
@@ -134,13 +134,13 @@ class XMLWriter(object):
             line = escape(line)
         if indent:
             self._data.write(
-                "%s%s%s" % (self._indent_char * self._indent, line, self._newline_char)
+                f"{self._indent_char * self._indent}{line}{self._newline_char}"
             )
         else:
-            self._data.write("%s%s" % (line, self._newline_char))
+            self._data.write(f"{line}{self._newline_char}")
 
     def write_comment(self, text):
-        self.write_line("<!-- %s -->" % (text,))
+        self.write_line(f"<!-- {text} -->")
 
     def write_tag(self, tag_name, attributes, data=None):
         self.write_line(

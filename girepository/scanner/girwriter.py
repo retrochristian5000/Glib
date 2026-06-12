@@ -33,7 +33,7 @@ COMPATIBLE_GIR_VERSION = "1.2"
 
 class GIRWriter(XMLWriter):
     def __init__(self, namespace, sources_roots=[]):
-        super(GIRWriter, self).__init__()
+        super().__init__()
         self.write_comment(
             "This file was automatically generated from C sources - DO NOT EDIT!\n"
             "To affect the contents of this file, edit the original C definitions,\n"
@@ -355,7 +355,7 @@ class GIRWriter(XMLWriter):
     def _type_to_name(self, typeval):
         if not typeval.resolved:
             raise AssertionError(
-                "Caught unresolved type %r (ctype=%r)" % (typeval, typeval.ctype)
+                f"Caught unresolved type {typeval!r} (ctype={typeval.ctype!r})"
             )
         assert typeval.target_giname is not None
         prefix = self._namespace.name + "."
@@ -414,7 +414,7 @@ class GIRWriter(XMLWriter):
                 elif isinstance(parent, girast.Compound):
                     length = parent.get_field_index(ntype.length_param_name)
                 else:
-                    assert False, "parent not a callable or compound: %r" % parent
+                    assert False, f"parent not a callable or compound: {parent!r}"
                 attrs.insert(0, ("length", "%d" % (length,)))
 
             with self.tagcontext("array", attrs):
@@ -707,7 +707,7 @@ class GIRWriter(XMLWriter):
                 self._write_union(field.anonymous_node)
             else:
                 raise AssertionError(
-                    "Unknown field anonymous: %r" % (field.anonymous_node,)
+                    f"Unknown field anonymous: {field.anonymous_node!r}"
                 )
         else:
             attrs = [("name", field.name)]

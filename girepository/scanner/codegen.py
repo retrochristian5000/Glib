@@ -26,7 +26,7 @@ from contextlib import contextmanager
 from . import girast
 
 
-class CCodeGenerator(object):
+class CCodeGenerator:
     def __init__(
         self,
         namespace,
@@ -50,7 +50,7 @@ class CCodeGenerator(object):
 
     def gen_symbol(self, name):
         name = name.replace(" ", "_")
-        return "%s_%s" % (self.namespace.symbol_prefixes[0], name)
+        return f"{self.namespace.symbol_prefixes[0]}_{name}"
 
     def _typecontainer_to_ctype(self, param):
         if isinstance(param, girast.Parameter) and param.direction in (
@@ -71,23 +71,16 @@ class CCodeGenerator(object):
 
     def _write_prelude(self, out, func):
         if self.function_decoration:
-            out.write(
-                """
-%s"""
-                % " ".join(self.function_decoration)
-            )
+            out.write("\n" + " ".join(self.function_decoration))
 
         out.write(
-            """
-%s
-%s ("""
-            % (self._typecontainer_to_ctype(func.retval), func.symbol)
+            "\n" f"{self._typecontainer_to_ctype(func.retval)}\n" f"{func.symbol} ("
         )
         n_params = len(func.parameters)
         if func.parameters:
             for i, param in enumerate(func.parameters):
                 ctype = self._typecontainer_to_ctype(param)
-                out.write("%s %s" % (ctype, param.argname))
+                out.write(f"{ctype} {param.argname}")
                 if i < n_params - 1:
                     out.write(", ")
         else:
@@ -100,12 +93,12 @@ class CCodeGenerator(object):
 
     def _write_annotation_transfer(self, node):
         if node.type not in girast.BASIC_TYPES or node.type.ctype.endswith("*"):
-            self.out_c.write(" (transfer %s)" % (node.transfer,))
+            self.out_c.write(f" (transfer {node.transfer})")
 
     def _write_docs(self, func):
-        self.out_c.write("/**\n * %s:\n" % (func.symbol,))
+        self.out_c.write(f"/**\n * {func.symbol}:\n")
         for param in func.parameters:
-            self.out_c.write(" * @%s" % (param.argname,))
+            self.out_c.write(f" * @{param.argname}")
             if param.direction in (
                 girast.PARAM_DIRECTION_OUT,
                 girast.PARAM_DIRECTION_INOUT,
@@ -114,7 +107,7 @@ class CCodeGenerator(object):
                     allocate_string = " caller-allocates"
                 else:
                     allocate_string = ""
-                self.out_c.write(": (%s%s) " % (param.direction, allocate_string))
+                self.out_c.write(f": ({param.direction}{allocate_string}) ")
                 self._write_annotation_transfer(param)
             self.out_c.write(":\n")
         self.out_c.write(" *\n")
@@ -140,36 +133,34 @@ class CCodeGenerator(object):
         nsupper = self.namespace.name.upper()
 
         for header in self.include_first_header:
-            self.out_h.write("""#include "%s"\n""" % header)
+            self.out_h.write(f"""#include "{header}"\n""")
 
         self.out_h.write(
-            """
-#ifndef __%s_H__
-#define __%s_H__
-
-#include <glib-object.h>
-
-"""
-            % (nsupper, nsupper)
+            "\n"
+            f"#ifndef __{nsupper}_H__\n"
+            f"#define __{nsupper}_H__\n"
+            "\n"
+            "#include <glib-object.h>\n"
+            "\n"
         )
 
         for header in self.include_last_header:
-            self.out_h.write("""#include "%s"\n""" % header)
+            self.out_h.write(f'#include "{header}"\n')
 
         self.out_c.write(warning)
 
         for header in self.include_first_src:
-            self.out_c.write("""#include "%s"\n""" % header)
+            self.out_c.write(f'#include "{header}"\n')
 
         src_dir = os.path.dirname(os.path.realpath(self.out_c.name))
         header = os.path.relpath(self.out_h_filename, src_dir)
-        self.out_c.write("""#include "%s"\n\n""" % (header,))
+        self.out_c.write(f'#include "{header}"\n\n')
 
         for header in self.include_last_src:
-            self.out_c.write("""#include "%s"\n""" % header)
+            self.out_c.write(f'#include "{header}"\n')
 
     def _codegen_end(self):
-        self.out_h.write("""#endif\n""")
+        self.out_h.write("#endif\n")
 
         self.out_h.close()
         self.out_c.close()

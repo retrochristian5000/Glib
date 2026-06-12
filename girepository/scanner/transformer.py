@@ -61,7 +61,7 @@ class TransformerException(Exception):
     pass
 
 
-class Transformer(object):
+class Transformer:
     namespace = property(lambda self: self._namespace)
 
     def __init__(
@@ -121,7 +121,7 @@ class Transformer(object):
             positions = set()
             positions.update(original.file_positions)
             positions.update(node.file_positions)
-            message.fatal("Namespace conflict for '%s'" % (node.name,), positions)
+            message.fatal(f"Namespace conflict for '{node.name}'", positions)
         else:
             self._namespace.append(node)
 
@@ -173,8 +173,7 @@ class Transformer(object):
         basename = os.path.basename(include_path)
         if not basename.endswith(".gir"):
             raise SystemExit(
-                "Include path '%s' must be a filename path "
-                "ending in .gir" % (include_path,)
+                f"Include path '{include_path}' must be a filename path ending in .gir"
             )
         girname = basename[:-4]
         include = girast.Include.from_string(girname)
@@ -200,8 +199,7 @@ class Transformer(object):
                 and ns not in self._parsed_includes
             ):
                 message.warn(
-                    ("Deprecated reference to identifier " + "prefix %s in GIName %s")
-                    % (ns, name)
+                    f"Deprecated reference to identifier prefix {ns} in GIName {name}"
                 )
                 return self._namespace.get(giname)
             include = self._parsed_includes[ns]
@@ -233,13 +231,13 @@ class Transformer(object):
             # For backwards compatibility, was always unconditionally added to the list.
             searchdirs.append("/usr/share/gir-1.0")
 
-        girname = "%s-%s.gir" % (include.name, include.version)
+        girname = f"{include.name}-{include.version}.gir"
         for d in searchdirs:
             path = os.path.join(d, girname)
             if os.path.exists(path):
                 return path
         sys.stderr.write(
-            "Couldn't find include '%s' (search path: '%s')\n" % (girname, searchdirs)
+            f"Couldn't find include '{girname}' (search path: '{searchdirs}')\n"
         )
         sys.exit(1)
 
@@ -280,8 +278,7 @@ class Transformer(object):
         """Return an iterator over all included namespaces; the
         currently-scanned namespace is first."""
         yield self._namespace
-        for ns in self._parsed_includes.values():
-            yield ns
+        yield from self._parsed_includes.values()
 
     def _sort_matches(self, val):
         """Key sort which ensures items in self._namespace are last by returning
@@ -305,8 +302,7 @@ class Transformer(object):
             proc_name = proc_name.strip()
             if proc.returncode:
                 raise ValueError(
-                    "filter: %r exited: %d with error: %s"
-                    % (self._symbol_filter_cmd, proc.returncode, err)
+                    f"filter: {self._symbol_filter_cmd!r} exited: {proc.returncode} with error: {err}"
                 )
             name = proc_name.decode("ascii")
             name = name.strip()
@@ -342,11 +338,7 @@ class Transformer(object):
                 if name in ns:
                     return [(ns, name)]
         raise ValueError(
-            "Unknown namespace for %s '%s'"
-            % (
-                "identifier" if is_identifier else "symbol",
-                name,
-            )
+            f"Unknown namespace for {'identifier' if is_identifier else 'symbol'} '{name}'"
         )
 
     def split_ctype_namespaces(self, ident):
@@ -381,8 +373,7 @@ class Transformer(object):
             proc_ident, err = proc.communicate(ident.encode())
             if proc.returncode:
                 raise ValueError(
-                    "filter: %r exited: %d with error: %s"
-                    % (self._identifier_filter_cmd, proc.returncode, err)
+                    f"filter: {self._identifier_filter_cmd!r} exited: {proc.returncode} with error: {err}"
                 )
             ident = proc_ident.decode("ascii").strip()
 
@@ -400,11 +391,7 @@ class Transformer(object):
                 return name
         ns, name = matches[-1]
         raise TransformerException(
-            "Skipping foreign identifier '%s' from namespace %s"
-            % (
-                ident,
-                ns.name,
-            )
+            f"Skipping foreign identifier '{ident}' from namespace {ns.name}"
         )
         return None
 
@@ -419,7 +406,7 @@ class Transformer(object):
             raise TransformerException(str(e))
         if ns != self._namespace:
             raise TransformerException(
-                "Skipping foreign symbol from namespace %s" % (ns.name,)
+                f"Skipping foreign symbol from namespace {ns.name}"
             )
         if hidden:
             return "_" + name
@@ -450,7 +437,7 @@ class Transformer(object):
         elif stype == CSYMBOL_TYPE_OBJECT:
             pass
         else:
-            print("transformer: unhandled symbol: '%s'" % (symbol,))
+            print(f"transformer: unhandled symbol: '{symbol}'")
 
     def _enum_common_prefix(self, symbol):
         def common_prefix(a, b):
@@ -614,15 +601,13 @@ class Transformer(object):
         assert namespace and parent_name
         if hidden:
             parent_name = "_" + parent_name
-        fake_union = girast.Union("%s__%s__union" % (parent_name, symbol.ident))
+        fake_union = girast.Union(f"{parent_name}__{symbol.ident}__union")
         # _parse_fields accesses <type>.base_type.child_list, so we have to
         # pass symbol.base_type even though that refers to the array, not the
         # union.
         self._parse_fields(symbol.base_type, fake_union)
         self._append_new_node(fake_union)
-        fake_type = girast.Type(
-            target_giname="%s.%s" % (namespace.name, fake_union.name)
-        )
+        fake_type = girast.Type(target_giname=f"{namespace.name}.{fake_union.name}")
         return fake_type
 
     def _create_member(self, symbol, parent_symbol=None):
@@ -708,7 +693,7 @@ class Transformer(object):
             node.add_symbol_reference(symbol)
         else:
             raise NotImplementedError(
-                "symbol '%s' of type %s" % (symbol.ident, ctype_name(ctype))
+                f"symbol '{symbol.ident}' of type {ctype_name(ctype)}"
             )
         return node
 
@@ -868,7 +853,7 @@ class Transformer(object):
                     message.warn_symbol(
                         parent_symbol, "missing parameter name; undocumentable"
                     )
-                ident = "arg%d" % (index,)
+                ident = f"arg{index}"
             else:
                 ident = symbol.ident
 
@@ -917,7 +902,7 @@ class Transformer(object):
             value = "true" if symbol.const_boolean else "false"
         elif symbol.const_double is not None:
             typeval = girast.TYPE_DOUBLE
-            value = "%f" % (symbol.const_double,)
+            value = f"{symbol.const_double:f}"
         else:
             raise AssertionError()
 
@@ -1096,7 +1081,7 @@ class Transformer(object):
         for namespace in self._parsed_includes.values():
             target = namespace.get_by_ctype(pointer_stripped)
             if target:
-                typeval.target_giname = "%s.%s" % (namespace.name, target.name)
+                typeval.target_giname = f"{namespace.name}.{target.name}"
                 return True
         return False
 
@@ -1114,7 +1099,7 @@ class Transformer(object):
             if not target:
                 target = namespace.get_by_ctype(pointer_stripped)
             if target:
-                typeval.target_giname = "%s.%s" % (namespace.name, target.name)
+                typeval.target_giname = f"{namespace.name}.{target.name}"
                 return True
         return False
 
@@ -1123,7 +1108,7 @@ class Transformer(object):
         for ns in self._iter_namespaces():
             node = ns.type_names.get(typeval.gtype_name, None)
             if node is not None:
-                typeval.target_giname = "%s.%s" % (ns.name, node.name)
+                typeval.target_giname = f"{ns.name}.{node.name}"
                 return True
         return False
 

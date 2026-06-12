@@ -44,11 +44,11 @@ _PROGRAM_TEMPLATE = """/* This file is generated, do not edit */
 #include <string.h>
 #include <stdlib.h>
 
-%(gdump_include)s
+{gdump_include}
 
 int
 main(int argc, char **argv)
-{
+{{
   GError *error = NULL;
   const char *introspect_dump_prefix = "--introspect-dump=";
 
@@ -56,22 +56,22 @@ main(int argc, char **argv)
   g_type_init ();
 #endif
 
-  %(init_sections)s
+  {init_sections}
 
   if (argc != 2 || !g_str_has_prefix (argv[1], introspect_dump_prefix))
-    {
+    {{
       g_printerr ("Usage: %%s --introspect-dump=input,output\\n", argv[0]);
       exit (1);
-    }
+    }}
 
   if (!dump_irepository (argv[1] + strlen (introspect_dump_prefix), &error))
-    {
+    {{
       g_assert (error != NULL);  /* help the static analyser */
       g_printerr ("%%s\\n", error->message);
       exit (1);
-    }
+    }}
   exit (0);
-}
+}}
 """
 
 
@@ -83,7 +83,7 @@ class LinkerError(Exception):
     pass
 
 
-class DumpCompiler(object):
+class DumpCompiler:
     _compiler = None
 
     def __init__(self, options, get_type_functions, error_quark_functions):
@@ -127,7 +127,7 @@ class DumpCompiler(object):
 
         c_path = self._generate_tempfile(tmpdir, ".c")
         with open(c_path, "w", encoding="utf-8") as f:
-            f.write(_PROGRAM_TEMPLATE % tpl_args)
+            f.write(_PROGRAM_TEMPLATE.format(**tpl_args))
 
             # We need to reference our get_type and error_quark functions
             # to make sure they are pulled in at the linking stage if the
@@ -183,10 +183,8 @@ class DumpCompiler(object):
     # Private API
 
     def _generate_tempfile(self, tmpdir, suffix=""):
-        tmpl = "%s-%s%s" % (
-            self._options.namespace_name,
-            self._options.namespace_version,
-            suffix,
+        tmpl = (
+            f"{self._options.namespace_name}-{self._options.namespace_version}{suffix}"
         )
         return os.path.join(tmpdir, tmpl)
 
@@ -239,7 +237,7 @@ class DumpCompiler(object):
         # priority (or we might run with installed library that is older)
         for source in sources:
             if not os.path.exists(source):
-                raise CompilerError("Could not find object file: %s" % (source,))
+                raise CompilerError(f"Could not find object file: {source}")
 
         args.extend(sources)
 
@@ -283,7 +281,7 @@ class DumpCompiler(object):
         dll_dirs.add_dll_dirs(self._packages)
 
         if not self._options.quiet:
-            print("g-ir-scanner: link: %s" % (subprocess.list2cmdline(args),))
+            print(f"g-ir-scanner: link: {subprocess.list2cmdline(args)}")
             sys.stdout.flush()
 
         msys = os.environ.get("MSYSTEM", None)
@@ -294,7 +292,7 @@ class DumpCompiler(object):
             tf, tf_name = tempfile.mkstemp()
             with os.fdopen(tf, "wb") as f:
                 shellcontents = " ".join([x.replace("\\", "/") for x in args])
-                fcontents = "#!/bin/sh\nunset PWD\n{}\n".format(shellcontents)
+                fcontents = f"#!/bin/sh\nunset PWD\n{shellcontents}\n"
                 if not isinstance(fcontents, bytes):
                     fcontents = fcontents.encode("utf-8")
                 f.write(fcontents)

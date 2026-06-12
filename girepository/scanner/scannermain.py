@@ -606,7 +606,7 @@ match the namespace prefix.""",
 
 
 def _error(msg):
-    raise SystemExit("ERROR: %s" % (msg,))
+    raise SystemExit(f"ERROR: {msg}")
 
 
 def passthrough_gir(path, f):
@@ -640,7 +640,7 @@ def test_codegen(
         )
         gen.write()
     else:
-        _error("Invalid namespace '%s'" % (namespace,))
+        _error(f"Invalid namespace '{namespace}'")
     return 0
 
 
@@ -673,7 +673,7 @@ def extract_filenames(args):
         # to understand C API implemented in C++ files.
         if os.path.splitext(arg)[1] in ALL_EXTS:
             if not os.path.exists(arg):
-                _error("%s: no such a file or directory" % (arg,))
+                _error(f"{arg}: no such a file or directory")
             # Make absolute, because we do comparisons inside scannerparser.c
             # against the absolute path that cpp will give us
             filenames.append(arg)
@@ -683,7 +683,7 @@ def extract_filenames(args):
 def extract_filelist(options):
     filenames = []
     if not os.path.exists(options.filelist):
-        _error("%s: no such filelist file" % (options.filelist,))
+        _error(f"{options.filelist}: no such filelist file")
     with open(options.filelist, "r", encoding=None) as filelist_file:
         lines = filelist_file.readlines()
     for line in lines:
@@ -700,7 +700,7 @@ def extract_filelist(options):
             or filename.endswith(".hxx")
         ):
             if not os.path.exists(filename):
-                _error("%s: Invalid filelist entry-no such file or directory" % (line,))
+                _error(f"{line}: Invalid filelist entry-no such file or directory")
             # Make absolute, because we do comparisons inside scannerparser.c
             # against the absolute path that cpp will give us
             filenames.append(filename)
@@ -756,11 +756,11 @@ def create_transformer(namespace, options):
 
     for include in options.includes:
         if os.sep in include:
-            _error("Invalid include path '%s'" % (include,))
+            _error(f"Invalid include path '{include}'")
         try:
             include_obj = Include.from_string(include)
         except Exception:
-            _error("Malformed include '%s'\n" % (include,))
+            _error(f"Malformed include '{include}'\n")
         transformer.register_include(include_obj)
     for include_path in options.includes_uninstalled:
         transformer.register_include_uninstalled(include_path)
@@ -842,8 +842,8 @@ def write_output(data, options):
         output = sys.stdout.buffer
         try:
             output.write(data)
-        except IOError as e:
-            _error("while writing output: %s" % (e.strerror,))
+        except OSError as e:
+            _error(f"while writing output: {e.strerror}")
     elif options.reparse_validate_gir:
         main_f, main_f_name = tempfile.mkstemp(suffix=".gir")
 
@@ -862,8 +862,7 @@ def write_output(data, options):
             passthrough_gir(main_f_name, temp_f)
         if not utils.files_are_identical(main_f_name, temp_f_name):
             _error(
-                "Failed to re-parse gir file; scanned='%s' passthrough='%s'"
-                % (main_f_name, temp_f_name)
+                f"Failed to re-parse gir file; scanned='{main_f_name}' passthrough='{temp_f_name}'"
             )
         os.unlink(temp_f_name)
         try:
@@ -877,8 +876,8 @@ def write_output(data, options):
         try:
             with open(options.output, "wb") as output:
                 output.write(data)
-        except IOError as e:
-            _error("opening/writing output: %s" % (e.strerror,))
+        except OSError as e:
+            _error(f"opening/writing output: {e.strerror}")
 
 
 def get_source_root_dirs(options, filenames):
@@ -887,7 +886,7 @@ def get_source_root_dirs(options, filenames):
 
     # None passed, we need to guess
     filenames = [os.path.realpath(p) for p in filenames]
-    dirs = sorted(set([os.path.dirname(f) for f in filenames]))
+    dirs = sorted({os.path.dirname(f) for f in filenames})
 
     # We need commonpath (3.5+), otherwise give up
     if not hasattr(os.path, "commonpath"):
@@ -939,7 +938,7 @@ def scanner_main(args):
     if options.format == "gir":
         from scanner.girwriter import GIRWriter as Writer
     else:
-        _error("Unknown format: %s" % (options.format,))
+        _error(f"Unknown format: {options.format}")
 
     if not (options.libraries or options.program or options.header_only):
         _error("Must specify --program or --library")
@@ -951,7 +950,7 @@ def scanner_main(args):
         "gtk-doc-docbook",
     ]
     if options.doc_format and options.doc_format not in DOC_FORMATS:
-        _error("Unknown doc-format: %s" % (options.doc_format,))
+        _error(f"Unknown doc-format: {options.doc_format}")
 
     namespace = create_namespace(options)
     logger = message.MessageLogger.get(namespace=namespace)
@@ -1004,12 +1003,8 @@ def scanner_main(args):
         return 1
     elif warning_count > 0 and show_suppression:
         print(
-            "g-ir-scanner: %s: warning: %d warnings suppressed "
+            f"g-ir-scanner: {transformer.namespace.name}: warning: {warning_count} warnings suppressed "
             "(use --warn-all to see them)"
-            % (
-                transformer.namespace.name,
-                warning_count,
-            )
         )
 
     # Write out AST

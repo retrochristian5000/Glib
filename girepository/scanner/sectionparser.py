@@ -24,12 +24,12 @@ from . import girast
 from .utils import to_underscores
 
 
-class SectionsFile(object):
+class SectionsFile:
     def __init__(self, sections):
         self.sections = sections
 
 
-class Section(object):
+class Section:
     def __init__(self):
         self.file = None
         self.title = None
@@ -37,7 +37,7 @@ class Section(object):
         self.subsections = []
 
 
-class Subsection(object):
+class Subsection:
     def __init__(self, name):
         self.name = name
         self.symbols = []
@@ -99,16 +99,16 @@ def write_sections_file(f, sections_file):
     for section in sections_file.sections:
         f.write("\n<SECTION>\n")
         if section.file is not None:
-            f.write("<FILE>%s</FILE>\n" % (section.file,))
+            f.write(f"<FILE>{section.file}</FILE>\n")
         if section.title is not None:
-            f.write("<TITLE>%s</TITLE>\n" % (section.title,))
+            f.write(f"<TITLE>{section.title}</TITLE>\n")
         if section.includes is not None:
-            f.write("<INCLUDE>%s</INCLUDE>\n" % (section.includes,))
+            f.write(f"<INCLUDE>{section.includes}</INCLUDE>\n")
 
         is_first_subsection = True
         for subsection in section.subsections:
             if subsection.name is not None:
-                f.write("<SUBSECTION %s>\n" % (subsection.name,))
+                f.write(f"<SUBSECTION {subsection.name}>\n")
             elif not is_first_subsection:
                 f.write("\n<SUBSECTION>\n")
 

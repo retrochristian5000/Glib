@@ -31,7 +31,7 @@ from .message import Position, warn
 from .utils import to_underscores
 
 
-class Type(object):
+class Type:
     """
     A Type can be either:
     * A reference to a node (target_giname)
@@ -195,14 +195,14 @@ class Type(object):
 
     def __repr__(self):
         if self.target_fundamental:
-            data = "target_fundamental=%s, " % (self.target_fundamental,)
+            data = f"target_fundamental={self.target_fundamental}, "
         elif self.target_giname:
-            data = "target_giname=%s, " % (self.target_giname,)
+            data = f"target_giname={self.target_giname}, "
         elif self.target_foreign:
-            data = "target_foreign=%s, " % (self.target_foreign,)
+            data = f"target_foreign={self.target_foreign}, "
         else:
             data = ""
-        return "%s(%sctype=%s)" % (self.__class__.__name__, data, self.ctype)
+        return f"{self.__class__.__name__}({data}ctype={self.ctype})"
 
 
 class TypeUnknown(Type):
@@ -434,7 +434,7 @@ SIGNAL_CLEANUP = "cleanup"
 SIGNAL_MUST_COLLECT = "must-collect"
 
 
-class Namespace(object):
+class Namespace:
     def __init__(self, name, version, identifier_prefixes=None, symbol_prefixes=None):
         self.name = name
         self.version = version
@@ -473,7 +473,7 @@ class Namespace(object):
         if "." in name:
             target = name
         else:
-            target = "%s.%s" % (self.name, name)
+            target = f"{self.name}.{name}"
         return Type(target_giname=target, ctype=ctype)
 
     def track(self, node):
@@ -519,7 +519,7 @@ class Namespace(object):
         previous = self.names.get(node.name)
         if previous is not None:
             if not replace:
-                raise ValueError("Namespace conflict: %r" % (node,))
+                raise ValueError(f"Namespace conflict: {node!r}")
             self.remove(previous)
 
         self.track(node)
@@ -570,7 +570,7 @@ class Namespace(object):
             node.walk(callback, [])
 
 
-class Include(object):
+class Include:
     def __init__(self, name, version):
         self.name = name
         self.version = version
@@ -604,10 +604,10 @@ class Include(object):
         return hash(str(self))
 
     def __str__(self):
-        return "%s-%s" % (self.name, self.version)
+        return f"{self.name}-{self.version}"
 
 
-class Annotated(object):
+class Annotated:
     """An object which has a few generic metadata
     properties."""
 
@@ -633,7 +633,7 @@ class Node(Annotated):
     c_name = property(
         lambda self: self.namespace.name + self.name if self.namespace else self.name
     )
-    gi_name = property(lambda self: "%s.%s" % (self.namespace.name, self.name))
+    gi_name = property(lambda self: f"{self.namespace.name}.{self.name}")
 
     def __init__(self, name=None):
         Annotated.__init__(self)
@@ -657,7 +657,7 @@ class Node(Annotated):
     def create_type(self):
         """Create a Type object referencing this node."""
         assert self.namespace is not None
-        return Type(target_giname=("%s.%s" % (self.namespace.name, self.name)))
+        return Type(target_giname=(f"{self.namespace.name}.{self.name}"))
 
     def _compare(self, other, op):
         return op((self.namespace, self.name), (other.namespace, other.name))
@@ -684,7 +684,7 @@ class Node(Annotated):
         return hash((self.namespace, self.name))
 
     def __repr__(self):
-        return "%s('%s')" % (self.__class__.__name__, self.name)
+        return f"{self.__class__.__name__}('{self.name}')"
 
     def inherit_file_positions(self, node):
         self.file_positions.update(node.file_positions)
@@ -717,9 +717,7 @@ class Node(Annotated):
 
     def walk(self, callback, chain):
         res = callback(self, chain)
-        assert res in (True, False), "Walk function must return boolean, not %r" % (
-            res,
-        )
+        assert res in (True, False), f"Walk function must return boolean, not {res!r}"
         if not res:
             return False
         chain.append(self)
@@ -800,13 +798,13 @@ class Callable(Node):
         for i, parameter in enumerate(self.parameters):
             if parameter.argname == name:
                 return i
-        raise ValueError("Unknown argument %s" % (name,))
+        raise ValueError(f"Unknown argument {name}")
 
     def get_parameter(self, name):
         for parameter in self.all_parameters:
             if parameter.argname == name:
                 return parameter
-        raise ValueError("Unknown argument %s" % (name,))
+        raise ValueError(f"Unknown argument {name}")
 
 
 class FunctionMacro(Node):
@@ -852,7 +850,7 @@ class Function(Callable):
         # Returns GType
         rettype = self.retval.type
         if not rettype.is_equiv(TYPE_GTYPE) and rettype.target_giname != "Gtk.Type":
-            warn("function '%s' returns '%r', not a GType" % (self.name, rettype))
+            warn(f"function '{self.name}' returns '{rettype!r}', not a GType")
             return False
 
         return True
@@ -1092,7 +1090,7 @@ class Member(Annotated):
         return hash(self.name)
 
     def __repr__(self):
-        return "%s('%s')" % (self.__class__.__name__, self.name)
+        return f"{self.__class__.__name__}('{self.name}')"
 
 
 class Compound(Node, Registered):
@@ -1143,13 +1141,13 @@ class Compound(Node, Registered):
         for field in self.fields:
             if field.name == name:
                 return field
-        raise ValueError("Unknown field %s" % (name,))
+        raise ValueError(f"Unknown field {name}")
 
     def get_field_index(self, name):
         for i, field in enumerate(self.fields):
             if field.name == name:
                 return i
-        raise ValueError("Unknown field %s" % (name,))
+        raise ValueError(f"Unknown field {name}")
 
 
 class Field(Annotated):
@@ -1193,7 +1191,7 @@ class Field(Annotated):
         return hash(self.name)
 
     def __repr__(self):
-        return "%s('%s')" % (self.__class__.__name__, self.name)
+        return f"{self.__class__.__name__}('{self.name}')"
 
 
 class Record(Compound):

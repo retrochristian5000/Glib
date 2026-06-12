@@ -42,9 +42,9 @@ def check_output(flags, ignore_errors, command=None):
         if ignore_errors:
             print(output)
             return ""
-        raise PkgConfigError("pkg-config: %s\n%s" % (e, output))
+        raise PkgConfigError(f"pkg-config: {e}\n{output}")
     except OSError as e:
-        raise PkgConfigError("pkg-config: error executing command %s: %s" % (argv, e))
+        raise PkgConfigError(f"pkg-config: error executing command {argv}: {e}")
 
 
 def cflags(packages, msvc_syntax=False, ignore_errors=True, command=None):
