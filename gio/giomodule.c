@@ -922,6 +922,153 @@ weak_ref_free (GWeakRef *weak_ref)
   g_free (weak_ref);
 }
 
+/* A hash table of modules cached by _g_io_module_get_default(), mapping from
+ * extension point name (owned) to implementation (a GWeakRef pointing to a
+ * GObject ‘impl’ implementing that extension point).
+ *
+ * Accesses to it must be locked with @default_modules_lock.
+ *
+ * Currently the @default_modules_lock is used to provide blocking between
+ * concurrent calls to _g_io_module_get_default() so that multiple threads are
+ * serialised on construction and initialisation (`GInitable`, if implemented
+ * by the impl) of the impl.
+ */
+static GRecMutex default_modules_lock;
+static GHashTable *default_modules;
+
+/* Requires @default_modules_lock to be held. */
+static void *
+default_modules_lookup_locked (const char  *extension_point,
+                               GWeakRef   **impl_weak_ref_out)
+{
+  void *impl, *value;
+  GWeakRef *impl_weak_ref = NULL;
+
+  g_assert (impl_weak_ref_out != NULL);
+
+  if (default_modules)
+    {
+      if (g_hash_table_lookup_extended (default_modules, extension_point,
+                                        NULL, &value))
+        {
+          /* Don’t debug here, since we’re returning a cached object which was
+           * already printed earlier. */
+          *impl_weak_ref_out = impl_weak_ref = value;
+          impl = g_weak_ref_get (impl_weak_ref);
+
+          /* If the object has been finalised (impl == NULL), fall through and
+           * instantiate a new one. */
+          if (impl != NULL)
+            return g_steal_pointer (&impl);
+        }
+    }
+  else
+    {
+      default_modules = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                               g_free, (GDestroyNotify) weak_ref_free);
+    }
+
+  *impl_weak_ref_out = impl_weak_ref;
+
+  return NULL;
+}
+
+/* Requires @default_modules_lock to be held. */
+static void
+default_modules_update_locked (GWeakRef   *impl_weak_ref,
+                               const char *extension_point,
+                               void       *impl)
+{
+  if (impl_weak_ref == NULL)
+    {
+      impl_weak_ref = g_new0 (GWeakRef, 1);
+      g_weak_ref_init (impl_weak_ref, impl);
+      g_hash_table_insert (default_modules, g_strdup (extension_point),
+                           g_steal_pointer (&impl_weak_ref));
+    }
+  else
+    {
+      g_weak_ref_set (impl_weak_ref, impl);
+    }
+}
+
+/* Builds a priority-ordered array of `GIOExtension` instances to try when
+ * trying to init a default for @extension_point.
+ *
+ * The return value is (transfer container) and is guaranteed to be non-NULL
+ * iff @len_out > 0. */
+static GIOExtension **
+extension_point_build_default_priority_array (const char *extension_point,
+                                              const char *envvar,
+                                              size_t     *len_out)
+{
+  GIOExtensionPoint *ep;
+  const char *use_this;
+  GIOExtension *preferred = NULL;
+  size_t i, extensions_len;
+  GList *l;
+  GIOExtension **extensions = NULL;
+
+  g_assert (len_out != NULL);
+
+  _g_io_modules_ensure_loaded ();
+  ep = g_io_extension_point_lookup (extension_point);
+
+  if (!ep)
+    {
+      g_debug ("%s: Failed to find extension point ‘%s’",
+               G_STRFUNC, extension_point);
+      g_warn_if_reached ();
+      *len_out = 0;
+      return NULL;
+    }
+
+  /* It’s OK to query the environment here, even when running as setuid, because
+   * it only allows a choice between existing already-loaded modules. No new
+   * code is loaded based on the environment variable value. */
+  use_this = envvar ? g_getenv (envvar) : NULL;
+  if (g_strcmp0 (use_this, "help") == 0)
+    {
+      print_help (envvar, ep);
+      use_this = NULL;
+    }
+
+  l = g_io_extension_point_get_extensions (ep);
+  extensions_len = g_list_length (l);
+  extensions = g_new0 (GIOExtension *, extensions_len);
+  i = 0;
+
+  if (use_this)
+    {
+      preferred = g_io_extension_point_get_extension_by_name (ep, use_this);
+      if (preferred)
+        extensions[i++] = preferred;
+      else
+        g_warning ("Can't find module '%s' specified in %s", use_this, envvar);
+    }
+
+  for (; l != NULL; l = l->next)
+    {
+      GIOExtension *extension = l->data;
+      if (extension == preferred)
+        continue;
+
+      extensions[i++] = extension;
+    }
+
+  g_assert (i == extensions_len);
+
+  if (extensions_len == 0)
+    {
+      *len_out = 0;
+      g_free (extensions);
+      return NULL;
+    }
+
+  *len_out = extensions_len;
+  return g_steal_pointer (&extensions);
+}
+
 /**
  * _g_io_module_get_default:
  * @extension_point: the name of an extension point
@@ -956,85 +1103,30 @@ _g_io_module_get_default (const gchar         *extension_point,
 			  const gchar         *envvar,
 			  GIOModuleVerifyFunc  verify_func)
 {
-  static GRecMutex default_modules_lock;
-  static GHashTable *default_modules;
-  const char *use_this;
-  GList *l;
-  GIOExtensionPoint *ep;
-  GIOExtension *extension = NULL, *preferred;
-  gpointer impl, value;
+  GIOExtension *extension = NULL;
+  gpointer impl;
   GWeakRef *impl_weak_ref = NULL;
+  GIOExtension **extensions = NULL;
+  size_t extensions_len = 0;
 
   g_rec_mutex_lock (&default_modules_lock);
-  if (default_modules)
+  impl = default_modules_lookup_locked (extension_point, &impl_weak_ref);
+  if (impl != NULL)
     {
-      if (g_hash_table_lookup_extended (default_modules, extension_point,
-                                        NULL, &value))
-        {
-          /* Don’t debug here, since we’re returning a cached object which was
-           * already printed earlier. */
-          impl_weak_ref = value;
-          impl = g_weak_ref_get (impl_weak_ref);
-
-          /* If the object has been finalised (impl == NULL), fall through and
-           * instantiate a new one. */
-          if (impl != NULL)
-            {
-              g_rec_mutex_unlock (&default_modules_lock);
-              return g_steal_pointer (&impl);
-            }
-        }
-    }
-  else
-    {
-      default_modules = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                               g_free, (GDestroyNotify) weak_ref_free);
+      g_rec_mutex_unlock (&default_modules_lock);
+      return g_steal_pointer (&impl);
     }
 
-  _g_io_modules_ensure_loaded ();
-  ep = g_io_extension_point_lookup (extension_point);
-
-  if (!ep)
+  extensions = extension_point_build_default_priority_array (extension_point, envvar, &extensions_len);
+  if (extensions == NULL)
     {
-      g_debug ("%s: Failed to find extension point ‘%s’",
-               G_STRFUNC, extension_point);
-      g_warn_if_reached ();
       g_rec_mutex_unlock (&default_modules_lock);
       return NULL;
     }
 
-  /* It’s OK to query the environment here, even when running as setuid, because
-   * it only allows a choice between existing already-loaded modules. No new
-   * code is loaded based on the environment variable value. */
-  use_this = envvar ? g_getenv (envvar) : NULL;
-  if (g_strcmp0 (use_this, "help") == 0)
+  for (size_t i = 0; i < extensions_len; i++)
     {
-      print_help (envvar, ep);
-      use_this = NULL;
-    }
-
-  if (use_this)
-    {
-      preferred = g_io_extension_point_get_extension_by_name (ep, use_this);
-      if (preferred)
-	{
-	  impl = try_implementation (extension_point, preferred, verify_func);
-	  extension = preferred;
-	  if (impl)
-	    goto done;
-	}
-      else
-        g_warning ("Can't find module '%s' specified in %s", use_this, envvar);
-    }
-  else
-    preferred = NULL;
-
-  for (l = g_io_extension_point_get_extensions (ep); l != NULL; l = l->next)
-    {
-      extension = l->data;
-      if (extension == preferred)
-	continue;
-
+      extension = extensions[i];
       impl = try_implementation (extension_point, extension, verify_func);
       if (impl)
 	goto done;
@@ -1042,18 +1134,11 @@ _g_io_module_get_default (const gchar         *extension_point,
 
   impl = NULL;
 
+  g_clear_pointer (&extensions, g_free);
+  extensions_len = 0;
+
  done:
-  if (impl_weak_ref == NULL)
-    {
-      impl_weak_ref = g_new0 (GWeakRef, 1);
-      g_weak_ref_init (impl_weak_ref, impl);
-      g_hash_table_insert (default_modules, g_strdup (extension_point),
-                           g_steal_pointer (&impl_weak_ref));
-    }
-  else
-    {
-      g_weak_ref_set (impl_weak_ref, impl);
-    }
+  default_modules_update_locked (impl_weak_ref, extension_point, impl);
 
   g_rec_mutex_unlock (&default_modules_lock);
 
