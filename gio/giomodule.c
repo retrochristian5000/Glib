@@ -915,18 +915,11 @@ try_implementation (const char           *extension_point,
     }
 }
 
-static void
-weak_ref_free (GWeakRef *weak_ref)
-{
-  g_weak_ref_clear (weak_ref);
-  g_free (weak_ref);
-}
-
 /* A hash table of modules cached by _g_io_module_get_default(), mapping from
- * extension point name (owned) to implementation (a GWeakRef pointing to a
- * GObject ‘impl’ implementing that extension point).
+ * extension point name (owned) to state (a DefaultModuleState).
  *
- * Accesses to it must be locked with @default_modules_lock.
+ * Accesses to it and its `DefaultModuleState`s must be locked with
+ * @default_modules_lock.
  *
  * Currently the @default_modules_lock is used to provide blocking between
  * concurrent calls to _g_io_module_get_default() so that multiple threads are
@@ -936,15 +929,31 @@ weak_ref_free (GWeakRef *weak_ref)
 static GRecMutex default_modules_lock;
 static GHashTable *default_modules;
 
+typedef struct
+{
+  /* Weak ref which points to the extension point implementation if cached and
+   * initialised; or NULL if the implementation has not been initalised yet, if
+   * initialisation is still ongoing, or if the implementation has been
+   * finalised. */
+  GWeakRef initialised_impl;
+} DefaultModuleState;
+
+static void
+default_module_state_free (DefaultModuleState *state)
+{
+  g_weak_ref_clear (&state->initialised_impl);
+  g_free (state);
+}
+
 /* Requires @default_modules_lock to be held. */
 static void *
-default_modules_lookup_locked (const char  *extension_point,
-                               GWeakRef   **impl_weak_ref_out)
+default_modules_lookup_locked (const char          *extension_point,
+                               DefaultModuleState **state_out)
 {
   void *impl, *value;
-  GWeakRef *impl_weak_ref = NULL;
+  DefaultModuleState *state = NULL;
 
-  g_assert (impl_weak_ref_out != NULL);
+  g_assert (state_out != NULL);
 
   if (default_modules)
     {
@@ -953,8 +962,8 @@ default_modules_lookup_locked (const char  *extension_point,
         {
           /* Don’t debug here, since we’re returning a cached object which was
            * already printed earlier. */
-          *impl_weak_ref_out = impl_weak_ref = value;
-          impl = g_weak_ref_get (impl_weak_ref);
+          *state_out = state = value;
+          impl = g_weak_ref_get (&state->initialised_impl);
 
           /* If the object has been finalised (impl == NULL), fall through and
            * instantiate a new one. */
@@ -965,30 +974,30 @@ default_modules_lookup_locked (const char  *extension_point,
   else
     {
       default_modules = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                               g_free, (GDestroyNotify) weak_ref_free);
+                                               g_free, (GDestroyNotify) default_module_state_free);
     }
 
-  *impl_weak_ref_out = impl_weak_ref;
+  *state_out = state;
 
   return NULL;
 }
 
 /* Requires @default_modules_lock to be held. */
 static void
-default_modules_update_locked (GWeakRef   *impl_weak_ref,
-                               const char *extension_point,
-                               void       *impl)
+default_modules_update_locked (DefaultModuleState *state,
+                               const char         *extension_point,
+                               void               *impl)
 {
-  if (impl_weak_ref == NULL)
+  if (state == NULL)
     {
-      impl_weak_ref = g_new0 (GWeakRef, 1);
-      g_weak_ref_init (impl_weak_ref, impl);
+      state = g_new0 (DefaultModuleState, 1);
+      g_weak_ref_init (&state->initialised_impl, impl);
       g_hash_table_insert (default_modules, g_strdup (extension_point),
-                           g_steal_pointer (&impl_weak_ref));
+                           g_steal_pointer (&state));
     }
   else
     {
-      g_weak_ref_set (impl_weak_ref, impl);
+      g_weak_ref_set (&state->initialised_impl, impl);
     }
 }
 
@@ -1105,12 +1114,12 @@ _g_io_module_get_default (const gchar         *extension_point,
 {
   GIOExtension *extension = NULL;
   gpointer impl;
-  GWeakRef *impl_weak_ref = NULL;
+  DefaultModuleState *state = NULL;
   GIOExtension **extensions = NULL;
   size_t extensions_len = 0;
 
   g_rec_mutex_lock (&default_modules_lock);
-  impl = default_modules_lookup_locked (extension_point, &impl_weak_ref);
+  impl = default_modules_lookup_locked (extension_point, &state);
   if (impl != NULL)
     {
       g_rec_mutex_unlock (&default_modules_lock);
@@ -1138,7 +1147,7 @@ _g_io_module_get_default (const gchar         *extension_point,
   extensions_len = 0;
 
  done:
-  default_modules_update_locked (impl_weak_ref, extension_point, impl);
+  default_modules_update_locked (state, extension_point, impl);
 
   g_rec_mutex_unlock (&default_modules_lock);
 
