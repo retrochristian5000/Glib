@@ -35,6 +35,15 @@ gpointer _g_io_module_get_default (const gchar         *extension_point,
 				   const gchar         *envvar,
 				   GIOModuleVerifyFunc  verify_func);
 
+void _g_io_module_get_default_async (const char          *extension_point,
+                                     const char          *envvar,
+                                     GIOModuleVerifyFunc  verify_func,
+                                     GCancellable        *cancellable,
+                                     GAsyncReadyCallback  callback,
+                                     void                *user_data);
+void *_g_io_module_get_default_finish (GAsyncResult  *result,
+                                       GError       **error);
+
 GType    _g_io_module_get_default_type (const gchar *extension_point,
                                         const gchar *envvar,
                                         guint        is_supported_offset);

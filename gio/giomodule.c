@@ -915,6 +915,92 @@ try_implementation (const char           *extension_point,
     }
 }
 
+static void try_async_initable_implementation_cb (GObject      *source_object,
+                                                  GAsyncResult *result,
+                                                  void         *user_data);
+
+static void
+try_implementation_async (const char          *extension_point,
+                          GIOExtension        *extension,
+                          GIOModuleVerifyFunc  verify_func,
+                          GCancellable        *cancellable,
+                          GAsyncReadyCallback  callback,
+                          void                *user_data)
+{
+  GTask *task = NULL;
+  GType type = g_io_extension_get_type (extension);
+  void *impl;
+  char *failure_debug_message_prefix_owned = NULL;
+  const char *failure_debug_message_prefix;
+  GError *local_error = NULL;
+
+  task = g_task_new (NULL, cancellable, callback, user_data);
+  g_task_set_source_tag (task, try_implementation_async);
+
+  failure_debug_message_prefix = failure_debug_message_prefix_owned =
+      g_strdup_printf ("Failed to initialize %s (%s) for %s: ",
+                       g_io_extension_get_name (extension),
+                       g_type_name (type),
+                       extension_point);
+  g_task_set_task_data (task, g_steal_pointer (&failure_debug_message_prefix_owned), g_free);
+
+  if (g_type_is_a (type, G_TYPE_ASYNC_INITABLE))
+    {
+      g_async_initable_new_async (type, G_PRIORITY_DEFAULT, cancellable,
+                                  try_async_initable_implementation_cb, g_steal_pointer (&task),
+                                  NULL);
+      return;
+    }
+  else if (g_type_is_a (type, G_TYPE_INITABLE))
+    {
+      impl = g_initable_new (type, NULL, &local_error, NULL);
+      if (impl == NULL)
+        {
+          g_debug ("%s%s", failure_debug_message_prefix,
+                   local_error ? local_error->message : "");
+          g_clear_error (&local_error);
+        }
+    }
+  else
+    {
+      impl = g_object_new (type, NULL);
+      if (verify_func != NULL && !verify_func (impl))
+        g_clear_object (&impl);
+    }
+
+  g_task_return_pointer (task, g_steal_pointer (&impl), g_object_unref);
+  g_clear_object (&task);
+}
+
+static void
+try_async_initable_implementation_cb (GObject      *source_object,
+                                      GAsyncResult *result,
+                                      void         *user_data)
+{
+  GTask *task = g_steal_pointer (&user_data);
+  const char *failure_debug_message_prefix = g_task_get_task_data (task);
+  void *impl;
+  GError *local_error = NULL;
+
+  impl = g_async_initable_new_finish (G_ASYNC_INITABLE (source_object), result, &local_error);
+  if (impl == NULL)
+    {
+      g_debug ("%s%s", failure_debug_message_prefix,
+               local_error ? local_error->message : "");
+      g_clear_error (&local_error);
+    }
+
+  g_task_return_pointer (task, g_steal_pointer (&impl), g_object_unref);
+  g_clear_object (&task);
+}
+
+static void *
+try_implementation_finish (GAsyncResult  *result,
+                           GError       **error)
+{
+  return g_task_propagate_pointer (G_TASK (result), error);
+}
+
 /* A hash table of modules cached by _g_io_module_get_default(), mapping from
  * extension point name (owned) to state (a DefaultModuleState).
  *
@@ -924,7 +1010,11 @@ try_implementation (const char           *extension_point,
  * Currently the @default_modules_lock is used to provide blocking between
  * concurrent calls to _g_io_module_get_default() so that multiple threads are
  * serialised on construction and initialisation (`GInitable`, if implemented
- * by the impl) of the impl.
+ * by the impl) of the impl. TODO
+ *
+ * For _g_io_module_get_default_async(), blocking is provided by adding
+ * concurrent GTasks to a waiting_tasks list, and finishing them all when the
+ * impl is ready.
  */
 static GRecMutex default_modules_lock;
 static GHashTable *default_modules;
@@ -936,12 +1026,26 @@ typedef struct
    * initialisation is still ongoing, or if the implementation has been
    * finalised. */
   GWeakRef initialised_impl;
+
+  /* If these members are non-NULL, that means initialisation is ongoing and
+   * additional calls to get_default_async() will queue in @waiting_tasks. */
+  GIOExtension **extensions;  /* (nullable) (transfer container) (array len=extensions_len) */
+  size_t extensions_len;
+  size_t current_extension_index;
+  GPtrArray *waiting_tasks;  /* (nullable) (owned) (element-type GTask) */
 } DefaultModuleState;
 
 static void
 default_module_state_free (DefaultModuleState *state)
 {
   g_weak_ref_clear (&state->initialised_impl);
+
+  /* These must all have been cleared and released by now. */
+  g_assert (state->extensions == NULL);
+  g_assert (state->extensions_len == 0);
+  g_assert (state->current_extension_index == 0);
+  g_assert (state->waiting_tasks == NULL);
+
   g_free (state);
 }
 
@@ -987,8 +1091,10 @@ default_modules_lookup_or_create_locked (const char          *extension_point,
   return NULL;
 }
 
-/* Requires @default_modules_lock to be held. */
-static void
+/* Requires @default_modules_lock to be held.
+ *
+ * Returns the array of waiting GTasks, (transfer full) but (nullable). */
+static GPtrArray *
 default_modules_store_impl_locked (DefaultModuleState *state,
                                    const char         *extension_point,
                                    void               *impl)
@@ -996,6 +1102,13 @@ default_modules_store_impl_locked (DefaultModuleState *state,
   g_assert (state != NULL);
 
   g_weak_ref_set (&state->initialised_impl, impl);
+
+  /* The state tracking for the initialisation candidates is now finished with. */
+  g_clear_pointer (&state->extensions, g_free);
+  state->extensions_len = 0;
+  state->current_extension_index = 0;
+
+  return g_steal_pointer (&state->waiting_tasks);
 }
 
 /* Builds a priority-ordered array of `GIOExtension` instances to try when
@@ -1160,6 +1273,203 @@ _g_io_module_get_default (const gchar         *extension_point,
              G_STRFUNC, extension_point);
 
   return g_steal_pointer (&impl);
+}
+
+static void try_implementation_cb (GObject      *source_object,
+                                   GAsyncResult *result,
+                                   void         *user_data);
+static void finish_get_default_async (GTask     *task,
+                                      GPtrArray *waiting_tasks,
+                                      void      *impl);
+
+typedef struct
+{
+  char *extension_point;  /* (owned) (not nullable) */
+  GIOModuleVerifyFunc verify_func;  /* (nullable) */
+} GetDefaultData;
+
+static void
+get_default_data_free (GetDefaultData *data)
+{
+  g_free (data->extension_point);
+  g_free (data);
+}
+
+/* TODO Docs, tests */
+void
+_g_io_module_get_default_async (const char          *extension_point,
+                                const char          *envvar,
+                                GIOModuleVerifyFunc  verify_func,
+                                GCancellable        *cancellable,
+                                GAsyncReadyCallback  callback,
+                                void                *user_data)
+{
+  GTask *task = NULL;
+  GetDefaultData *data = NULL;
+  GIOExtension *extension = NULL;
+  gpointer impl;
+  DefaultModuleState *state = NULL;
+  GIOExtension **extensions = NULL;
+  size_t extensions_len = 0;
+
+  task = g_task_new (NULL, cancellable, callback, user_data);
+  g_task_set_source_tag (task, _g_io_module_get_default_async);
+
+  data = g_new0 (GetDefaultData, 1);
+  data->extension_point = g_strdup (extension_point);
+  data->verify_func = verify_func;
+  g_task_set_task_data (task, g_steal_pointer (&data), (GDestroyNotify) get_default_data_free);
+
+  g_rec_mutex_lock (&default_modules_lock);
+
+  /* In the case an impl is cached already, we don’t need to search for one,
+   * initialise one, or block or notify any waiters. */
+  impl = default_modules_lookup_or_create_locked (extension_point, &state);
+  if (impl != NULL)
+    {
+      g_rec_mutex_unlock (&default_modules_lock);
+      g_task_return_pointer (task, g_steal_pointer (&impl), g_object_unref);
+      g_clear_object (&task);
+      return;
+    }
+
+  /* If the @state indicates that another thread (or interleaved async job) has
+   * already started building the default impl for this extension point, bail
+   * out and ask for completion once the default impl has been initialised. */
+  if (state->extensions != NULL)
+    {
+      if (state->waiting_tasks == NULL)
+        state->waiting_tasks = g_ptr_array_new_with_free_func (g_object_unref);
+      g_ptr_array_add (state->waiting_tasks, g_steal_pointer (&task));
+      g_rec_mutex_unlock (&default_modules_lock);
+      return;
+    }
+
+  /* We’re the first caller to query the default for this extension point.
+   * Start asynchronously trying to initialise candidate implementations,
+   * sequentially. */
+  extensions = extension_point_build_default_priority_array (extension_point, envvar, &extensions_len);
+  if (extensions == NULL)
+    {
+      GPtrArray *waiting_tasks = default_modules_store_impl_locked (state, extension_point, NULL);
+      g_rec_mutex_unlock (&default_modules_lock);
+      finish_get_default_async (task, waiting_tasks, NULL);
+
+      g_clear_pointer (&waiting_tasks, g_ptr_array_unref);
+      g_clear_object (&task);
+      return;
+    }
+
+  g_assert (extensions_len > 0);
+
+  state->extensions = g_steal_pointer (&extensions);
+  state->extensions_len = extensions_len;
+  extensions_len = 0;
+  state->current_extension_index = 0;
+
+  extension = state->extensions[state->current_extension_index];
+  g_rec_mutex_unlock (&default_modules_lock);
+
+  try_implementation_async (extension_point, extension, verify_func,
+                            cancellable, try_implementation_cb, g_steal_pointer (&task));
+}
+
+static void
+try_implementation_cb (GObject      *source_object,
+                       GAsyncResult *result,
+                       void         *user_data)
+{
+  GTask *task = g_steal_pointer (&user_data);
+  GetDefaultData *data = g_task_get_task_data (task);
+  GCancellable *cancellable = g_task_get_cancellable (task);
+  DefaultModuleState *state = NULL;
+  GIOExtension *extension;
+  void *impl, *value;
+  GPtrArray *waiting_tasks = NULL;  /* (element-type GTask) (nullable) */
+  GError *local_error = NULL;
+
+  impl = try_implementation_finish (result, &local_error);
+
+  g_rec_mutex_lock (&default_modules_lock);
+
+  /* The state might have changed since we dropped the lock for
+   * try_implementation_async(). It should only have changed to add more waiting
+   * tasks though — this control flow is the only one which should be able to
+   * set the impl. */
+  g_assert (default_modules != NULL);
+
+  g_hash_table_lookup_extended (default_modules, data->extension_point, NULL, &value);
+  g_assert (value != NULL);
+  state = value;
+  g_assert (g_weak_ref_get (&state->initialised_impl) == NULL);
+
+  if (impl == NULL)
+    {
+      g_clear_error (&local_error);
+
+      /* Try the next candidate on the list, unless we’ve been cancelled or have
+       * reached the end. */
+      if (!g_cancellable_is_cancelled (cancellable) &&
+          state->current_extension_index + 1 < state->extensions_len)
+        {
+          state->current_extension_index++;
+          extension = state->extensions[state->current_extension_index];
+          g_rec_mutex_unlock (&default_modules_lock);
+          try_implementation_async (data->extension_point, extension, data->verify_func,
+                                    cancellable, try_implementation_cb, g_steal_pointer (&task));
+          return;
+        }
+    }
+
+  /* Successfully initialised an impl, been cancelled, or run out of candidates. */
+  extension = state->extensions[state->current_extension_index];
+  waiting_tasks = default_modules_store_impl_locked (state, data->extension_point, impl);
+  g_rec_mutex_unlock (&default_modules_lock);
+
+  finish_get_default_async (task, waiting_tasks, impl);
+
+  if (impl != NULL)
+    {
+      g_assert (extension != NULL);
+      g_debug ("%s: Found default implementation %s (%s) for ‘%s’",
+               G_STRFUNC, g_io_extension_get_name (extension),
+               G_OBJECT_TYPE_NAME (impl), data->extension_point);
+    }
+  else
+    g_debug ("%s: Failed to find default implementation for ‘%s’",
+             G_STRFUNC, data->extension_point);
+
+  g_clear_pointer (&waiting_tasks, g_ptr_array_unref);
+  g_clear_object (&task);
+  g_clear_object (&impl);
+}
+
+/* This should be called with @default_modules_lock *released*. */
+static void
+finish_get_default_async (GTask     *task,
+                          GPtrArray *waiting_tasks  /* (nullable) */,
+                          void      *impl  /* (transfer none) (nullable) */)
+{
+  g_task_return_pointer (task, (impl != NULL) ? g_object_ref (impl) : NULL, g_object_unref);
+
+  /* Notify any waiters that the new default impl is available. */
+  for (unsigned int i = 0; waiting_tasks != NULL && i < waiting_tasks->len; i++)
+    {
+      GTask *waiting_task = waiting_tasks->pdata[i];
+      g_task_return_pointer (waiting_task, (impl != NULL) ? g_object_ref (impl) : NULL, g_object_unref);
+    }
+}
+
+/* TODO Docs, tests */
+void *
+_g_io_module_get_default_finish (GAsyncResult  *result,
+                                 GError       **error)
+{
+  g_return_val_if_fail (g_task_is_valid (result, NULL), NULL);
+  g_return_val_if_fail (g_async_result_is_tagged (result, _g_io_module_get_default_async), NULL);
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+
+  return g_task_propagate_pointer (G_TASK (result), error);
 }
 
 extern GType g_inotify_file_monitor_get_type (void);
