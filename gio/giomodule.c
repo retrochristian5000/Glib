@@ -945,60 +945,57 @@ default_module_state_free (DefaultModuleState *state)
   g_free (state);
 }
 
-/* Requires @default_modules_lock to be held. */
+/* Requires @default_modules_lock to be held.
+ *
+ * Return value is (transfer full) but (nullable). */
 static void *
-default_modules_lookup_locked (const char          *extension_point,
-                               DefaultModuleState **state_out)
+default_modules_lookup_or_create_locked (const char          *extension_point,
+                                         DefaultModuleState **state_out)
 {
   void *impl, *value;
   DefaultModuleState *state = NULL;
 
   g_assert (state_out != NULL);
 
-  if (default_modules)
-    {
-      if (g_hash_table_lookup_extended (default_modules, extension_point,
-                                        NULL, &value))
-        {
-          /* Don’t debug here, since we’re returning a cached object which was
-           * already printed earlier. */
-          *state_out = state = value;
-          impl = g_weak_ref_get (&state->initialised_impl);
-
-          /* If the object has been finalised (impl == NULL), fall through and
-           * instantiate a new one. */
-          if (impl != NULL)
-            return g_steal_pointer (&impl);
-        }
-    }
-  else
+  if (default_modules == NULL)
     {
       default_modules = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                g_free, (GDestroyNotify) default_module_state_free);
     }
 
-  *state_out = state;
+  if (g_hash_table_lookup_extended (default_modules, extension_point,
+                                    NULL, &value))
+    {
+      /* Don’t debug here, since we’re returning a cached object which was
+       * already printed earlier. */
+      *state_out = state = value;
+      impl = g_weak_ref_get (&state->initialised_impl);
+
+      /* If the object has been finalised (impl == NULL), fall through and
+       * instantiate a new one. */
+      if (impl != NULL)
+        return g_steal_pointer (&impl);
+    }
+  else
+    {
+      *state_out = state = g_new0 (DefaultModuleState, 1);
+      g_weak_ref_init (&state->initialised_impl, NULL);
+      g_hash_table_insert (default_modules, g_strdup (extension_point),
+                           g_steal_pointer (&state));
+    }
 
   return NULL;
 }
 
 /* Requires @default_modules_lock to be held. */
 static void
-default_modules_update_locked (DefaultModuleState *state,
-                               const char         *extension_point,
-                               void               *impl)
+default_modules_store_impl_locked (DefaultModuleState *state,
+                                   const char         *extension_point,
+                                   void               *impl)
 {
-  if (state == NULL)
-    {
-      state = g_new0 (DefaultModuleState, 1);
-      g_weak_ref_init (&state->initialised_impl, impl);
-      g_hash_table_insert (default_modules, g_strdup (extension_point),
-                           g_steal_pointer (&state));
-    }
-  else
-    {
-      g_weak_ref_set (&state->initialised_impl, impl);
-    }
+  g_assert (state != NULL);
+
+  g_weak_ref_set (&state->initialised_impl, impl);
 }
 
 /* Builds a priority-ordered array of `GIOExtension` instances to try when
@@ -1119,7 +1116,7 @@ _g_io_module_get_default (const gchar         *extension_point,
   size_t extensions_len = 0;
 
   g_rec_mutex_lock (&default_modules_lock);
-  impl = default_modules_lookup_locked (extension_point, &state);
+  impl = default_modules_lookup_or_create_locked (extension_point, &state);
   if (impl != NULL)
     {
       g_rec_mutex_unlock (&default_modules_lock);
@@ -1147,7 +1144,7 @@ _g_io_module_get_default (const gchar         *extension_point,
   extensions_len = 0;
 
  done:
-  default_modules_update_locked (state, extension_point, impl);
+  default_modules_store_impl_locked (state, extension_point, impl);
 
   g_rec_mutex_unlock (&default_modules_lock);
 
