@@ -24,6 +24,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "gasyncinitable.h"
 #include "gnetworkmonitornm.h"
 #include "gioerror.h"
 #include "ginitable.h"
@@ -33,9 +34,11 @@
 #include "gnetworkingprivate.h"
 #include "gnetworkmonitor.h"
 #include "gdbusproxy.h"
+#include "gtask.h"
 
 static void g_network_monitor_nm_iface_init (GNetworkMonitorInterface *iface);
 static void g_network_monitor_nm_initable_iface_init (GInitableIface *iface);
+static void g_network_monitor_nm_async_initable_iface_init (GAsyncInitableIface *iface);
 
 enum
 {
@@ -84,6 +87,8 @@ G_DEFINE_TYPE_WITH_CODE (GNetworkMonitorNM, g_network_monitor_nm, G_TYPE_NETWORK
                                                 g_network_monitor_nm_iface_init)
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
                                                 g_network_monitor_nm_initable_iface_init)
+                         G_IMPLEMENT_INTERFACE (G_TYPE_ASYNC_INITABLE,
+                                                g_network_monitor_nm_async_initable_iface_init)
                          _g_io_modules_ensure_extension_points_registered ();
                          g_io_extension_point_implement (G_NETWORK_MONITOR_EXTENSION_POINT_NAME,
                                                          g_define_type_id,
@@ -288,15 +293,23 @@ has_property (GDBusProxy *proxy,
   return prop_found;
 }
 
+
+static void proxy_ready_cb (GObject      *source_object,
+                            GAsyncResult *result,
+                            void         *user_data);
+static gboolean finish_init (GNetworkMonitorNM  *self,
+                             GDBusProxy         *proxy,
+                             GError            **error);
+
 static gboolean
 g_network_monitor_nm_initable_init (GInitable     *initable,
                                     GCancellable  *cancellable,
                                     GError       **error)
 {
   GNetworkMonitorNM *nm = G_NETWORK_MONITOR_NM (initable);
-  GDBusProxy *proxy;
+  GDBusProxy *proxy = NULL;
   GInitableIface *parent_iface;
-  gchar *name_owner = NULL;
+  gboolean retval;
 
   parent_iface = g_type_interface_peek_parent (G_NETWORK_MONITOR_NM_GET_INITABLE_IFACE (initable));
   if (!parent_iface->init (initable, cancellable, error))
@@ -310,8 +323,77 @@ g_network_monitor_nm_initable_init (GInitable     *initable,
                                          "org.freedesktop.NetworkManager",
                                          cancellable,
                                          error);
-  if (!proxy)
+  if (proxy == NULL)
     return FALSE;
+
+  retval = finish_init (nm, proxy, error);
+  g_clear_object (&proxy);
+  return retval;
+}
+
+static void
+g_network_monitor_nm_async_initable_init_async (GAsyncInitable      *initable,
+                                                int                  io_priority,
+                                                GCancellable        *cancellable,
+                                                GAsyncReadyCallback  callback,
+                                                void                *user_data)
+{
+  GInitableIface *parent_iface;
+  GTask *task = NULL;
+  GError *local_error = NULL;
+
+  task = g_task_new (initable, cancellable, callback, user_data);
+  g_task_set_source_tag (task, g_network_monitor_nm_async_initable_init_async);
+
+  parent_iface = g_type_interface_peek_parent (G_NETWORK_MONITOR_NM_GET_INITABLE_IFACE (initable));
+  if (!parent_iface->init (G_INITABLE (initable), cancellable, &local_error))
+    {
+      g_task_return_error (task, g_steal_pointer (&local_error));
+      g_clear_object (&task);
+      return;
+    }
+
+  g_dbus_proxy_new_for_bus (G_BUS_TYPE_SYSTEM,
+                            G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START | G_DBUS_PROXY_FLAGS_GET_INVALIDATED_PROPERTIES,
+                            NULL,
+                            "org.freedesktop.NetworkManager",
+                            "/org/freedesktop/NetworkManager",
+                            "org.freedesktop.NetworkManager",
+                            cancellable,
+                            proxy_ready_cb,
+                            g_steal_pointer (&task));
+}
+
+static void
+proxy_ready_cb (GObject      *source_object,
+                GAsyncResult *result,
+                void         *user_data)
+{
+  GTask *task = g_steal_pointer (&user_data);
+  GNetworkMonitorNM *self = g_task_get_source_object (task);
+  GDBusProxy *proxy = NULL;
+  GError *local_error = NULL;
+
+  proxy = g_dbus_proxy_new_for_bus_finish (result, &local_error);
+
+  if (proxy == NULL ||
+      !finish_init (self, proxy, &local_error))
+    g_task_return_error (task, g_steal_pointer (&local_error));
+  else
+    g_task_return_boolean (task, TRUE);
+
+  g_clear_object (&proxy);
+  g_clear_object (&task);
+}
+
+static gboolean
+finish_init (GNetworkMonitorNM  *self,
+             GDBusProxy         *proxy,
+             GError            **error)
+{
+  char *name_owner = NULL;
+
+  g_assert (proxy != NULL);
 
   name_owner = g_dbus_proxy_get_name_owner (proxy);
 
@@ -319,7 +401,6 @@ g_network_monitor_nm_initable_init (GInitable     *initable,
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    _("NetworkManager not running"));
-      g_object_unref (proxy);
       return FALSE;
     }
 
@@ -330,16 +411,23 @@ g_network_monitor_nm_initable_init (GInitable     *initable,
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    _("NetworkManager version too old"));
-      g_object_unref (proxy);
       return FALSE;
     }
 
-  nm->priv->signal_id = g_signal_connect (G_OBJECT (proxy), "g-properties-changed",
-                                          G_CALLBACK (proxy_properties_changed_cb), nm);
-  nm->priv->proxy = proxy;
-  sync_properties (nm, FALSE);
+  self->priv->signal_id = g_signal_connect (G_OBJECT (proxy), "g-properties-changed",
+                                            G_CALLBACK (proxy_properties_changed_cb), self);
+  self->priv->proxy = g_object_ref (proxy);
+  sync_properties (self, FALSE);
 
   return TRUE;
+}
+
+static gboolean
+g_network_monitor_nm_async_initable_init_finish (GAsyncInitable  *initable,
+                                                 GAsyncResult    *result,
+                                                 GError         **error)
+{
+  return g_task_propagate_boolean (G_TASK (result), error);
 }
 
 static void
@@ -381,4 +469,11 @@ static void
 g_network_monitor_nm_initable_iface_init (GInitableIface *iface)
 {
   iface->init = g_network_monitor_nm_initable_init;
+}
+
+static void
+g_network_monitor_nm_async_initable_iface_init (GAsyncInitableIface *iface)
+{
+  iface->init_async = g_network_monitor_nm_async_initable_init_async;
+  iface->init_finish = g_network_monitor_nm_async_initable_init_finish;
 }
