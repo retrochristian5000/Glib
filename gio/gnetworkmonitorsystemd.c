@@ -22,6 +22,7 @@
 
 #include <string.h>
 
+#include "gasyncinitable.h"
 #include "gnetworkmonitorsystemd.h"
 #include "gcancellable.h"
 #include "gioerror.h"
@@ -29,11 +30,13 @@
 #include "giomodule-priv.h"
 #include "gnetworkmonitor.h"
 #include "gdbusproxy.h"
+#include "gtask.h"
 
 #define G_NETWORK_MONITOR_SYSTEMD_GET_INITABLE_IFACE(o) (G_TYPE_INSTANCE_GET_INTERFACE ((o), G_TYPE_INITABLE, GInitable))
 
 static void g_network_monitor_systemd_iface_init (GNetworkMonitorInterface *iface);
 static void g_network_monitor_systemd_initable_iface_init (GInitableIface *iface);
+static void g_network_monitor_systemd_async_initable_iface_init (GAsyncInitableIface *iface);
 
 typedef enum
 {
@@ -58,16 +61,9 @@ struct _GNetworkMonitorSystemd
 
   GCancellable *cancellable;  /* (owned) */
 
-  /* At most one of proxy and fallback is set; neither while the async proxy
-   * setup is still pending. */
+  /* proxy is NULL while the async proxy setup is still pending. */
   GDBusProxy *proxy;  /* (owned) (nullable) */
   unsigned long signal_id;
-
-  /* Non-NULL only in fallback mode. The netlink backend disables its
-   * availability tracking when subclassed, so a standalone instance is needed
-   * to activate its full functionality. */
-  GNetworkMonitorNetlink *fallback;  /* (owned) (nullable) */
-  unsigned long fallback_network_changed_id;
 
   GNetworkConnectivity connectivity;
   gboolean network_available;
@@ -78,6 +74,8 @@ G_DEFINE_TYPE_WITH_CODE (GNetworkMonitorSystemd, g_network_monitor_systemd, G_TY
                                                 g_network_monitor_systemd_iface_init)
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
                                                 g_network_monitor_systemd_initable_iface_init)
+                         G_IMPLEMENT_INTERFACE (G_TYPE_ASYNC_INITABLE,
+                                                g_network_monitor_systemd_async_initable_iface_init)
                          _g_io_modules_ensure_extension_points_registered ();
                          g_io_extension_point_implement (G_NETWORK_MONITOR_EXTENSION_POINT_NAME,
                                                          g_define_type_id,
@@ -192,6 +190,13 @@ proxy_properties_changed_cb (GDBusProxy             *proxy,
   sync_properties (self);
 }
 
+static gboolean finish_init (GNetworkMonitorSystemd  *self,
+                             GDBusProxy              *proxy,
+                             GError                 **error);
+static void proxy_ready_cb (GObject      *source_object,
+                            GAsyncResult *result,
+                            gpointer      user_data);
+
 /* networkd may be running without being the connectivity authority (e.g. it
  * manages no links). It then reports OnlineState "unknown". Only act as the
  * backend when we can confirm it is managing the network; otherwise decline so
@@ -214,107 +219,6 @@ networkd_is_authoritative (GDBusProxy *proxy)
   return authoritative;
 }
 
-/* The netlink monitor emits network-changed on any default route change, not
- * only when availability flips; force_network_changed preserves that. */
-static void
-sync_properties_from_fallback (GNetworkMonitorSystemd *self,
-                               gboolean                force_network_changed)
-{
-  gboolean available;
-  GNetworkConnectivity connectivity;
-  gboolean changed;
-
-  g_object_get (self->fallback,
-                "network-available", &available,
-                "connectivity", &connectivity,
-                NULL);
-
-  changed = set_availability (self, available, connectivity);
-  if (changed || force_network_changed)
-    g_signal_emit_by_name (self, "network-changed", available);
-}
-
-static void
-fallback_network_changed_cb (GNetworkMonitor        *fallback,
-                             gboolean                network_available,
-                             GNetworkMonitorSystemd *self)
-{
-  sync_properties_from_fallback (self, TRUE);
-}
-
-static void
-start_fallback (GNetworkMonitorSystemd *self)
-{
-  GError *error = NULL;
-
-  self->fallback = g_initable_new (G_TYPE_NETWORK_MONITOR_NETLINK,
-                                   self->cancellable, &error, NULL);
-  if (self->fallback == NULL)
-    {
-      g_debug ("GNetworkMonitorSystemd: could not create the netlink fallback monitor: %s",
-               error->message);
-      g_error_free (error);
-      return;
-    }
-
-  self->fallback_network_changed_id =
-      g_signal_connect (self->fallback, "network-changed",
-                        G_CALLBACK (fallback_network_changed_cb), self);
-  sync_properties_from_fallback (self, FALSE);
-}
-
-static void
-proxy_ready_cb (GObject      *source_object,
-                GAsyncResult *result,
-                gpointer      user_data)
-{
-  GNetworkMonitorSystemd *self = user_data;
-  GDBusProxy *proxy;
-  GError *error = NULL;
-  char *name_owner = NULL;
-
-  proxy = g_dbus_proxy_new_for_bus_finish (result, &error);
-
-  if (proxy == NULL)
-    {
-      /* Cancelled means the monitor is being disposed; leave it alone. */
-      if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        {
-          g_debug ("GNetworkMonitorSystemd: could not create the D-Bus proxy: %s",
-                   error->message);
-          start_fallback (self);
-        }
-      g_error_free (error);
-      g_object_unref (self);
-      return;
-    }
-
-  name_owner = g_dbus_proxy_get_name_owner (proxy);
-
-  if (name_owner == NULL)
-    {
-      g_debug ("GNetworkMonitorSystemd: systemd-networkd is not running");
-      g_object_unref (proxy);
-      start_fallback (self);
-    }
-  else if (!networkd_is_authoritative (proxy))
-    {
-      g_debug ("GNetworkMonitorSystemd: systemd-networkd is not managing the network");
-      g_object_unref (proxy);
-      start_fallback (self);
-    }
-  else
-    {
-      self->signal_id = g_signal_connect (G_OBJECT (proxy), "g-properties-changed",
-                                          G_CALLBACK (proxy_properties_changed_cb), self);
-      self->proxy = g_steal_pointer (&proxy);
-      sync_properties (self);
-    }
-
-  g_free (name_owner);
-  g_object_unref (self);
-}
-
 static gboolean
 g_network_monitor_systemd_initable_init (GInitable     *initable,
                                          GCancellable  *cancellable,
@@ -322,12 +226,59 @@ g_network_monitor_systemd_initable_init (GInitable     *initable,
 {
   GNetworkMonitorSystemd *self = G_NETWORK_MONITOR_SYSTEMD (initable);
   GInitableIface *parent_iface;
+  GDBusProxy *proxy = NULL;
+  gboolean retval;
 
   /* Set up the netlink parent, which provides the route lookups used by
    * can_reach(). */
   parent_iface = g_type_interface_peek_parent (G_NETWORK_MONITOR_SYSTEMD_GET_INITABLE_IFACE (initable));
   if (!parent_iface->init (initable, cancellable, error))
     return FALSE;
+
+  /* We need to determine whether networkd is usable. Ideally this would happen
+   * asynchronously, but we need sync support for it for backwards compatibility.*/
+  self->cancellable = g_cancellable_new ();
+  proxy = g_dbus_proxy_new_for_bus_sync (G_BUS_TYPE_SYSTEM,
+                                         G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
+                                         NULL,
+                                         "org.freedesktop.network1",
+                                         "/org/freedesktop/network1",
+                                         "org.freedesktop.network1.Manager",
+                                         self->cancellable,
+                                         error);
+  if (proxy == NULL)
+    return FALSE;
+
+  retval = finish_init (self, proxy, error);
+  g_clear_object (&proxy);
+  return retval;
+}
+
+static void
+g_network_monitor_systemd_async_initable_init_async (GAsyncInitable      *initable,
+                                                     int                  io_priority,
+                                                     GCancellable        *cancellable,
+                                                     GAsyncReadyCallback  callback,
+                                                     void                *user_data)
+{
+  GNetworkMonitorSystemd *self = G_NETWORK_MONITOR_SYSTEMD (initable);
+  GInitableIface *parent_iface;
+  GTask *task = NULL;
+  GError *local_error = NULL;
+
+  task = g_task_new (initable, cancellable, callback, user_data);
+  g_task_set_source_tag (task, g_network_monitor_systemd_async_initable_init_async);
+
+  /* Set up the netlink parent, which provides the route lookups used by
+   * can_reach(). We know this doesn’t implement GAsyncInitable, so no need to
+   * try and do that asynchronously. */
+  parent_iface = g_type_interface_peek_parent (G_NETWORK_MONITOR_SYSTEMD_GET_INITABLE_IFACE (initable));
+  if (!parent_iface->init (G_INITABLE (initable), cancellable, &local_error))
+    {
+      g_task_return_error (task, g_steal_pointer (&local_error));
+      g_clear_object (&task);
+      return;
+    }
 
   /* Whether networkd is usable is determined asynchronously in
    * proxy_ready_cb(), which holds a reference on the monitor. */
@@ -340,9 +291,72 @@ g_network_monitor_systemd_initable_init (GInitable     *initable,
                             "org.freedesktop.network1.Manager",
                             self->cancellable,
                             proxy_ready_cb,
-                            g_object_ref (self));
+                            g_steal_pointer (&task));
+}
 
-  return TRUE;
+static void
+proxy_ready_cb (GObject      *source_object,
+                GAsyncResult *result,
+                gpointer      user_data)
+{
+  GTask *task = g_steal_pointer (&user_data);
+  GNetworkMonitorSystemd *self = g_task_get_source_object (task);
+  GDBusProxy *proxy = NULL;
+  GError *local_error = NULL;
+
+  proxy = g_dbus_proxy_new_for_bus_finish (result, &local_error);
+
+  if (proxy == NULL ||
+      !finish_init (self, proxy, &local_error))
+    g_task_return_error (task, g_steal_pointer (&local_error));
+  else
+    g_task_return_boolean (task, TRUE);
+
+  g_clear_object (&proxy);
+  g_clear_object (&task);
+}
+
+static gboolean
+finish_init (GNetworkMonitorSystemd  *self,
+             GDBusProxy              *proxy,
+             GError                 **error)
+{
+  char *name_owner = NULL;
+  gboolean retval;
+
+  g_assert (proxy != NULL);
+
+  name_owner = g_dbus_proxy_get_name_owner (proxy);
+
+  if (name_owner == NULL ||
+      !networkd_is_authoritative (proxy))
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
+                           (name_owner == NULL)
+                               ? "systemd-networkd is not running"
+                               : "systemd-networkd is not managing the network");
+      retval = FALSE;
+    }
+  else
+    {
+      self->signal_id = g_signal_connect (G_OBJECT (proxy), "g-properties-changed",
+                                          G_CALLBACK (proxy_properties_changed_cb), self);
+      self->proxy = g_steal_pointer (&proxy);
+      sync_properties (self);
+      retval = TRUE;
+    }
+
+  g_free (name_owner);
+
+  return retval;
+}
+
+static gboolean
+g_network_monitor_systemd_async_initable_init_finish (GAsyncInitable  *initable,
+                                                      GAsyncResult    *result,
+                                                      GError         **error)
+{
+  return g_task_propagate_boolean (G_TASK (result), error);
 }
 
 static void
@@ -355,9 +369,6 @@ g_network_monitor_systemd_dispose (GObject *object)
 
   g_clear_signal_handler (&self->signal_id, self->proxy);
   g_clear_object (&self->proxy);
-
-  g_clear_signal_handler (&self->fallback_network_changed_id, self->fallback);
-  g_clear_object (&self->fallback);
 
   G_OBJECT_CLASS (g_network_monitor_systemd_parent_class)->dispose (object);
 }
@@ -385,4 +396,11 @@ static void
 g_network_monitor_systemd_initable_iface_init (GInitableIface *iface)
 {
   iface->init = g_network_monitor_systemd_initable_init;
+}
+
+static void
+g_network_monitor_systemd_async_initable_iface_init (GAsyncInitableIface *iface)
+{
+  iface->init_async = g_network_monitor_systemd_async_initable_init_async;
+  iface->init_finish = g_network_monitor_systemd_async_initable_init_finish;
 }
