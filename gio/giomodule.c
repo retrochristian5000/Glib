@@ -1013,16 +1013,19 @@ try_implementation_finish (GAsyncResult  *result,
  * Accesses to it and its `DefaultModuleState`s must be locked with
  * @default_modules_lock.
  *
- * Currently the @default_modules_lock is used to provide blocking between
- * concurrent calls to _g_io_module_get_default() so that multiple threads are
- * serialised on construction and initialisation (`GInitable`, if implemented
- * by the impl) of the impl. TODO
+ * @default_modules_lock and DefaultModuleState.waiting_cond is used to provide
+ * synchronisation between concurrent calls to _g_io_module_get_default() so
+ * that multiple threads synchronise on construction and initialisation
+ * (`GInitable`, if implemented by the impl) of the impl. A cond is needed,
+ * rather than just blocking on @default_modules_lock, because that mutex has to
+ * be dropped while calling `GInitable.init()` as it potentially contains
+ * arbitrary user code.
  *
  * For _g_io_module_get_default_async(), blocking is provided by adding
  * concurrent GTasks to a waiting_tasks list, and finishing them all when the
  * impl is ready.
  */
-static GRecMutex default_modules_lock;
+static GMutex default_modules_lock;
 static GHashTable *default_modules;
 
 typedef struct
@@ -1039,6 +1042,7 @@ typedef struct
   size_t extensions_len;
   size_t current_extension_index;
   GPtrArray *waiting_tasks;  /* (nullable) (owned) (element-type GTask) */
+  GCond waiting_cond;  /* (mutex default_modules_lock) */
 } DefaultModuleState;
 
 static void
@@ -1051,6 +1055,8 @@ default_module_state_free (DefaultModuleState *state)
   g_assert (state->extensions_len == 0);
   g_assert (state->current_extension_index == 0);
   g_assert (state->waiting_tasks == NULL);
+
+  g_cond_clear (&state->waiting_cond);
 
   g_free (state);
 }
@@ -1114,7 +1120,25 @@ default_modules_store_impl_locked (DefaultModuleState *state,
   state->extensions_len = 0;
   state->current_extension_index = 0;
 
+  /* Notify any waiting _g_io_module_get_default() sync threads */
+  g_cond_broadcast (&state->waiting_cond);
+
   return g_steal_pointer (&state->waiting_tasks);
+}
+
+/* Notify any waiters that the new default impl is available. It’s expected that
+ * this will be called immediately after unlocking after calling
+ * default_modules_store_impl_locked(). That function has already broadcasted on
+ * the cond to notify sync waiters. */
+static void
+default_modules_notify_waiters (GPtrArray *waiting_tasks,
+                                void      *impl)
+{
+  for (unsigned int i = 0; waiting_tasks != NULL && i < waiting_tasks->len; i++)
+    {
+      GTask *waiting_task = waiting_tasks->pdata[i];
+      g_task_return_pointer (waiting_task, (impl != NULL) ? g_object_ref (impl) : NULL, g_object_unref);
+    }
 }
 
 /* Builds a priority-ordered array of `GIOExtension` instances to try when
@@ -1233,39 +1257,86 @@ _g_io_module_get_default (const gchar         *extension_point,
   DefaultModuleState *state = NULL;
   GIOExtension **extensions = NULL;
   size_t extensions_len = 0;
+  GPtrArray *waiting_tasks = NULL;
 
-  g_rec_mutex_lock (&default_modules_lock);
+  g_mutex_lock (&default_modules_lock);
   impl = default_modules_lookup_or_create_locked (extension_point, &state);
   if (impl != NULL)
     {
-      g_rec_mutex_unlock (&default_modules_lock);
+      g_mutex_unlock (&default_modules_lock);
       return g_steal_pointer (&impl);
+    }
+
+  /* If the @state indicates that another thread (or interleaved async job) has
+   * already started building the default impl for this extension point, bail
+   * out and block on completion once the default impl has been initialised. */
+  while (state->extensions != NULL)
+    {
+      g_cond_wait (&state->waiting_cond, &default_modules_lock);
+
+      if (state->extensions == NULL)
+        {
+          DefaultModuleState *state2 = NULL;
+
+          impl = default_modules_lookup_or_create_locked (extension_point, &state2);
+          g_assert (state2 == state);
+          g_mutex_unlock (&default_modules_lock);
+          return g_steal_pointer (&impl);
+        }
     }
 
   extensions = extension_point_build_default_priority_array (extension_point, envvar, &extensions_len);
   if (extensions == NULL)
     {
-      g_rec_mutex_unlock (&default_modules_lock);
+      GPtrArray *waiting_tasks = default_modules_store_impl_locked (state, extension_point, NULL);
+      g_mutex_unlock (&default_modules_lock);
+      default_modules_notify_waiters (waiting_tasks, NULL);
+      g_clear_pointer (&waiting_tasks, g_ptr_array_unref);
       return NULL;
     }
 
-  for (size_t i = 0; i < extensions_len; i++)
+  g_assert (extensions_len > 0);
+
+  state->extensions = g_steal_pointer (&extensions);
+  state->extensions_len = extensions_len;
+  extensions_len = 0;
+  state->current_extension_index = 0;
+
+  for (state->current_extension_index = 0;
+       state->current_extension_index < state->extensions_len;
+       state->current_extension_index++)
     {
-      extension = extensions[i];
+      void *impl2;
+      DefaultModuleState *state2 = NULL;
+
+      /* Try this implementation, but don’t hold the lock because
+       * try_implementation() can call into user code. */
+      extension = state->extensions[state->current_extension_index];
+      g_mutex_unlock (&default_modules_lock);
       impl = try_implementation (extension_point, extension, verify_func);
+      g_mutex_lock (&default_modules_lock);
+
+      /* Since we unlocked, the initialisation may have been completed via a parallel call */
+      impl2 = default_modules_lookup_or_create_locked (extension_point, &state2);
+      g_assert (state2 == state);
+      if (state->extensions == NULL)
+        {
+          g_clear_object (&impl);
+          g_mutex_unlock (&default_modules_lock);
+          return g_steal_pointer (&impl2);
+        }
+
       if (impl)
 	goto done;
     }
 
   impl = NULL;
 
-  g_clear_pointer (&extensions, g_free);
-  extensions_len = 0;
-
  done:
-  default_modules_store_impl_locked (state, extension_point, impl);
-
-  g_rec_mutex_unlock (&default_modules_lock);
+  waiting_tasks = default_modules_store_impl_locked (state, extension_point, impl);
+  g_mutex_unlock (&default_modules_lock);
+  default_modules_notify_waiters (waiting_tasks, impl);
+  g_clear_pointer (&waiting_tasks, g_ptr_array_unref);
 
   if (impl != NULL)
     {
@@ -1347,14 +1418,14 @@ _g_io_module_get_default_async (const char          *extension_point,
   data->verify_func = verify_func;
   g_task_set_task_data (task, g_steal_pointer (&data), (GDestroyNotify) get_default_data_free);
 
-  g_rec_mutex_lock (&default_modules_lock);
+  g_mutex_lock (&default_modules_lock);
 
   /* In the case an impl is cached already, we don’t need to search for one,
    * initialise one, or block or notify any waiters. */
   impl = default_modules_lookup_or_create_locked (extension_point, &state);
   if (impl != NULL)
     {
-      g_rec_mutex_unlock (&default_modules_lock);
+      g_mutex_unlock (&default_modules_lock);
       g_task_return_pointer (task, g_steal_pointer (&impl), g_object_unref);
       g_clear_object (&task);
       return;
@@ -1368,7 +1439,7 @@ _g_io_module_get_default_async (const char          *extension_point,
       if (state->waiting_tasks == NULL)
         state->waiting_tasks = g_ptr_array_new_with_free_func (g_object_unref);
       g_ptr_array_add (state->waiting_tasks, g_steal_pointer (&task));
-      g_rec_mutex_unlock (&default_modules_lock);
+      g_mutex_unlock (&default_modules_lock);
       return;
     }
 
@@ -1379,7 +1450,7 @@ _g_io_module_get_default_async (const char          *extension_point,
   if (extensions == NULL)
     {
       GPtrArray *waiting_tasks = default_modules_store_impl_locked (state, extension_point, NULL);
-      g_rec_mutex_unlock (&default_modules_lock);
+      g_mutex_unlock (&default_modules_lock);
       finish_get_default_async (task, waiting_tasks, NULL);
 
       g_clear_pointer (&waiting_tasks, g_ptr_array_unref);
@@ -1395,7 +1466,7 @@ _g_io_module_get_default_async (const char          *extension_point,
   state->current_extension_index = 0;
 
   extension = state->extensions[state->current_extension_index];
-  g_rec_mutex_unlock (&default_modules_lock);
+  g_mutex_unlock (&default_modules_lock);
 
   try_implementation_async (extension_point, extension, verify_func,
                             cancellable, try_implementation_cb, g_steal_pointer (&task));
@@ -1417,7 +1488,7 @@ try_implementation_cb (GObject      *source_object,
 
   impl = try_implementation_finish (result, &local_error);
 
-  g_rec_mutex_lock (&default_modules_lock);
+  g_mutex_lock (&default_modules_lock);
 
   /* The state might have changed since we dropped the lock for
    * try_implementation_async(). It should only have changed to add more waiting
@@ -1441,7 +1512,7 @@ try_implementation_cb (GObject      *source_object,
         {
           state->current_extension_index++;
           extension = state->extensions[state->current_extension_index];
-          g_rec_mutex_unlock (&default_modules_lock);
+          g_mutex_unlock (&default_modules_lock);
           try_implementation_async (data->extension_point, extension, data->verify_func,
                                     cancellable, try_implementation_cb, g_steal_pointer (&task));
           return;
@@ -1451,7 +1522,7 @@ try_implementation_cb (GObject      *source_object,
   /* Successfully initialised an impl, been cancelled, or run out of candidates. */
   extension = state->extensions[state->current_extension_index];
   waiting_tasks = default_modules_store_impl_locked (state, data->extension_point, impl);
-  g_rec_mutex_unlock (&default_modules_lock);
+  g_mutex_unlock (&default_modules_lock);
 
   finish_get_default_async (task, waiting_tasks, impl);
 
@@ -1479,12 +1550,7 @@ finish_get_default_async (GTask     *task,
 {
   g_task_return_pointer (task, (impl != NULL) ? g_object_ref (impl) : NULL, g_object_unref);
 
-  /* Notify any waiters that the new default impl is available. */
-  for (unsigned int i = 0; waiting_tasks != NULL && i < waiting_tasks->len; i++)
-    {
-      GTask *waiting_task = waiting_tasks->pdata[i];
-      g_task_return_pointer (waiting_task, (impl != NULL) ? g_object_ref (impl) : NULL, g_object_unref);
-    }
+  default_modules_notify_waiters (waiting_tasks, impl);
 }
 
 /**
