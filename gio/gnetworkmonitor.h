@@ -71,6 +71,14 @@ GType                 g_network_monitor_get_type              (void);
 GIO_AVAILABLE_IN_2_32
 GNetworkMonitor      *g_network_monitor_get_default           (void);
 
+GIO_AVAILABLE_IN_2_90
+void                  g_network_monitor_get_default_async     (GCancellable        *cancellable,
+                                                               GAsyncReadyCallback  callback,
+                                                               void                *user_data);
+GIO_AVAILABLE_IN_2_90
+GNetworkMonitor      *g_network_monitor_get_default_finish    (GAsyncResult  *result,
+                                                               GError       **error);
+
 GIO_AVAILABLE_IN_2_32
 gboolean              g_network_monitor_get_network_available (GNetworkMonitor     *monitor);
 

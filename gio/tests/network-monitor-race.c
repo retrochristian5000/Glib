@@ -84,6 +84,93 @@ test_network_monitor (void)
     }
 }
 
+static void
+async_result_cb (GObject      *source_object,
+                 GAsyncResult *result,
+                 void         *user_data)
+{
+  GAsyncResult **result_out = user_data;
+
+  g_assert (result_out != NULL);
+  g_assert (*result_out == NULL);
+
+  *result_out = g_object_ref (result);
+
+  g_main_context_wakeup (g_main_context_get_thread_default ());
+}
+
+static void *
+async_thread_cb (void *user_data)
+{
+  int *go = user_data;  /* (atomic) */
+  GMainContext *context = NULL;
+  GAsyncResult *result = NULL;
+  GNetworkMonitor *monitor = NULL;
+  GError *local_error = NULL;
+
+  context = g_main_context_new ();
+  g_main_context_push_thread_default (context);
+
+  /* Spin until all the threads are ready. */
+  while (!g_atomic_int_get (go));
+
+  g_network_monitor_get_default_async (NULL, async_result_cb, &result);
+
+  while (result == NULL)
+    g_main_context_iteration (context, TRUE);
+
+  monitor = g_network_monitor_get_default_finish (result, &local_error);
+  g_assert_no_error (local_error);
+  g_assert_nonnull (result);
+
+  g_main_context_pop_thread_default (context);
+  g_clear_pointer (&context, g_main_context_unref);
+  g_clear_object (&result);
+
+  return g_steal_pointer (&monitor);
+}
+
+static void
+test_network_monitor_async (void)
+{
+  g_test_summary ("Test that calling g_network_monitor_get_default() async in parallel returns the same result");
+
+  if (!g_test_subprocess ())
+    {
+      for (unsigned int ii = 0; ii < MAX_RUNS; ii++)
+        {
+           g_test_trap_subprocess (NULL,
+                                   0,
+                                   G_TEST_SUBPROCESS_INHERIT_STDOUT |
+                                   G_TEST_SUBPROCESS_INHERIT_STDERR);
+           g_test_trap_assert_passed ();
+        }
+    }
+  else
+    {
+      GThread *threads[20] = { NULL, };
+      GNetworkMonitor *results[20] = { NULL, };
+      int go = 0;  /* (atomic) */
+
+      for (size_t i = 0; i < G_N_ELEMENTS (threads); i++)
+        threads[i] = g_thread_new (NULL, async_thread_cb, &go);
+
+      g_atomic_int_set (&go, 1);
+
+      for (size_t i = 0; i < G_N_ELEMENTS (threads); i++)
+        results[i] = g_thread_join (g_steal_pointer (&threads[i]));
+
+      for (size_t i = 0; i < G_N_ELEMENTS (threads) - 1; i++)
+        {
+          g_assert_true (G_IS_NETWORK_MONITOR (results[i]));
+          g_assert_true (results[i] == results[i + 1]);
+        }
+
+      for (size_t i = 0; i < G_N_ELEMENTS (threads); i++)
+        g_clear_object (&results[i]);
+    }
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -91,6 +178,8 @@ main (int argc, char *argv[])
 
   g_test_add_func ("/network-monitor/create-in-thread",
                    test_network_monitor);
+  g_test_add_func ("/network-monitor/create-in-thread/async",
+                   test_network_monitor_async);
 
   return g_test_run ();
 }

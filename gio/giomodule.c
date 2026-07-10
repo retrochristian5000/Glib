@@ -888,6 +888,12 @@ try_implementation (const char           *extension_point,
   GType type = g_io_extension_get_type (extension);
   gpointer impl;
 
+  /* We can’t support GAsyncInitable here, as that would require being in
+   * control of the GMainContext to iterate to wait for its completion, and we
+   * aren’t. If callers want proper async support, they need to call
+   * _g_io_module_get_default_async(). In order for that to work, we must
+   * require that any impl that implements GAsyncInitable must also implement
+   * GInitable. */
   if (g_type_is_a (type, G_TYPE_INITABLE))
     {
       GError *error = NULL;
@@ -1295,7 +1301,28 @@ get_default_data_free (GetDefaultData *data)
   g_free (data);
 }
 
-/* TODO Docs, tests */
+/**
+ * _g_io_module_get_default_async:
+ * @extension_point: the name of an extension point
+ * @envvar: (nullable): the name of an environment variable to
+ *     override the default implementation
+ * @verify_func: (nullable): a function to call to verify that
+ *     a given implementation is usable in the current environment
+ * @cancellable: a cancellable
+ * @callback: async completion callback
+ * @user_data: data to pass to @callback
+ *
+ * Retrieves the default object implementing @extension_point, asynchronously.
+ *
+ * This behaves like `_g_io_module_get_default()` except it runs asynchronously
+ * and supports initialising implementations using [iface@Gio.AsyncInitable] in
+ * addition to what’s supported by `_g_io_module_get_default()`.
+ *
+ * It is thread safe, and doesn’t hold a lock while an implementation’s (sync or
+ * async) initialisation function is being called.
+ *
+ * Since: 2.90
+ */
 void
 _g_io_module_get_default_async (const char          *extension_point,
                                 const char          *envvar,
@@ -1460,7 +1487,18 @@ finish_get_default_async (GTask     *task,
     }
 }
 
-/* TODO Docs, tests */
+/**
+ * _g_io_module_get_default_finish:
+ * @result: an async result
+ * @error: return location for a `GError`, or `NULL` to ignore
+ *
+ * Finishes asynchronously getting an extension point implementation, as started
+ * by `_g_io_module_get_default_async()`.
+ *
+ * Returns: (transfer full) (type GObject.Object): initialized implementation of
+ *   the extension point, or `NULL` on error
+ * Since: 2.90
+ */
 void *
 _g_io_module_get_default_finish (GAsyncResult  *result,
                                  GError       **error)
