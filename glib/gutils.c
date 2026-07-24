@@ -238,23 +238,52 @@ g_find_program_in_path (const gchar *program)
  * g_find_program_in_path:
  * @program: (type filename): a program name in the GLib file name encoding
  * 
- * Locates the first executable named @program in the user's path, in the
- * same way that execvp() would locate it. Returns an allocated string
- * with the absolute path name, or %NULL if the program is not found in
- * the path. If @program is already an absolute path, returns a copy of
- * @program if @program exists and is executable, and %NULL otherwise.
- *  
- * On Windows, if @program does not have a file type suffix, tries
- * with the suffixes .exe, .cmd, .bat and .com, and the suffixes in
- * the `PATHEXT` environment variable. 
+ * Searches for an executable named `program`.
+ *
+ * If `program` does not exist, or if it exists but does not have executable
+ * permissions, this function returns `NULL`. `program` must be a file, not a 
+ * directory.
+ *
+ * If `program` is an absolute path, this function verifies the path exists 
+ * and the path is executable. For example 
+ * `g_find_program_in_path ("/usr/bin/gimp")` returns the path `/usr/bin/gimp`
+ * if that file exists and if it is executable.
+ *
+ * If `program` is a relative path or a file name, this function searches for 
+ * the file in the system's `PATH` environment variable. If `PATH` is 
+ * undefined, this function searches for `program` in the following 
+ * directories (this list may change over time as operating systems change):
  * 
- * On Windows, it looks for the file in the same way as CreateProcess() 
- * would. This means first in the directory where the executing
- * program was loaded from, then in the current directory, then in the
- * Windows 32-bit system directory, then in the Windows directory, and
- * finally in the directories in the `PATH` environment variable. If
- * the program is found, the return value contains the full name
- * including the type suffix.
+ * * On *nix systems, in `/bin/`, `/usr/bin/`, and the current directory (in 
+ * that order).
+ * * On Windows systems, in the Windows, system, and current directory (in 
+ * that order). This function calls `GetWindowsDirectoryW()`, 
+ * `GetSystemDirectoryW()` and `GetModuleFileNameW()` to determine the 
+ * directories, which are typically `C:\Windows\System32\`, `C:\Windows\`, and 
+ * `.`.
+ * 
+ * This function returns the first executable result.
+ *
+ * On *nix systems, this function behaves similar to `execvp()` with the
+ * following differences:
+ * 
+ * * `execvp()` searches paths available to the _effective_ user, while this 
+ * function searches paths available to the _real_ user. 
+ * * If the `PATH` environment variable is undefined, `execvp()` searches
+ * the directories `.`, `/bin/`, `/usr/bin/` (in that order), while this 
+ * function searches paths in the order described above.
+ * 
+ * On Windows systems, this function behaves similar to `CreateProcess()` 
+ * with the following differences:
+ * 
+ * * If `program` is not an absolute path, `CreateProcess()` searches for
+ * the executable in the current drive and the current directory, while this
+ * function searches paths in the order described above.
+ * * If `program` does not include a file extension, this function 
+ * implicitly searches for files with suffixes `.exe`, `.cmd`, `.bat`, `.com`, 
+ * and the suffixes in the `PATHEXT` environment variable. For example, 
+ * calling `g_find_program_in_path ("winword")` is equivalent to searching for 
+ * `g_find_program_in_path ("winword.exe")`.
  *
  * Returns: (type filename) (transfer full) (nullable): a newly-allocated
  *   string with the absolute path, or %NULL
