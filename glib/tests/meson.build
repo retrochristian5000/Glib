@@ -5,6 +5,7 @@ glib_tests = {
     'c_args' : cc.get_id() == 'gcc' ? ['-Wstrict-aliasing=2'] : [],
     'c_standards': c_standards.keys(),
   },
+  'atomic-private' : {},
   'base64' : {},
   'bitlock' : {},
   'bookmarkfile' : {},

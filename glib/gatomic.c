@@ -22,6 +22,7 @@
 #include "config.h"
 
 #include "gatomic.h"
+#include "gatomicprivate.h"
 
 /**
  * G_ATOMIC_LOCK_FREE:
@@ -617,45 +618,19 @@ guintptr
 #include <intrin.h>
 #endif
 
-#if defined (_MSC_VER) && \
-    ((!defined (_M_IX86) && !defined (_M_AMD64)) || _MSC_VER >= 1920) /* VS2019 */
-  /* VS2017 and earlier do not provide __iso_volatile intrinsics
-   * on Intel targets.
-   */
-# define HAVE_ISO_VOLATILE_INTRINSICS
-#endif
-
 /*
  * http://msdn.microsoft.com/en-us/library/ms684122(v=vs.85).aspx
  */
 
-#if defined(HAVE_ISO_VOLATILE_INTRINSICS)
-
-G_STATIC_ASSERT (sizeof (int) == sizeof (__int32));
-
 gint
 (g_atomic_int_get) (const volatile gint *atomic)
 {
-  int result = __iso_volatile_load32 (atomic);
+  int result = g_atomic_int_get_relaxed (atomic);
   _ReadWriteBarrier ();
   MemoryBarrier ();
 
   return result;
 }
-
-#else /* ! defined(HAVE_ISO_VOLATILE_INTRINSICS) */
-
-gint
-(g_atomic_int_get) (const volatile gint *atomic)
-{
-  int result = *atomic;
-  _ReadWriteBarrier ();
-  MemoryBarrier ();
-
-  return result;
-}
-
-#endif /* ! defined(HAVE_ISO_VOLATILE_INTRINSICS) */
 
 void
 (g_atomic_int_set) (volatile gint *atomic,
@@ -741,43 +716,15 @@ guint
 #endif
 }
 
-#if defined(HAVE_ISO_VOLATILE_INTRINSICS)
-
 gpointer
 (g_atomic_pointer_get) (const volatile void *atomic)
 {
-#if GLIB_SIZEOF_VOID_P == 8
-  const __int64 volatile *p = (const __int64 volatile *) atomic;
-#else
-  const __int32 volatile *p = (const __int32 volatile *) atomic;
-#endif
-
-#if GLIB_SIZEOF_VOID_P == 8
-  gpointer result = (gpointer) __iso_volatile_load64 (p);
-#else
-  gpointer result = (gpointer) __iso_volatile_load32 (p);
-#endif
+  gpointer result = g_atomic_pointer_get_relaxed (atomic);
   _ReadWriteBarrier ();
   MemoryBarrier ();
 
   return result;
 }
-
-#else /* ! defined(HAVE_ISO_VOLATILE_INTRINSICS) */
-
-gpointer
-(g_atomic_pointer_get) (const volatile void *atomic)
-{
-  const void * volatile *p = (const void * volatile *) atomic;
-
-  gpointer result = *p;
-  _ReadWriteBarrier ();
-  MemoryBarrier ();
-
-  return result;
-}
-
-#endif /* ! defined(HAVE_ISO_VOLATILE_INTRINSICS) */
 
 void
 (g_atomic_pointer_set) (volatile void *atomic,
