@@ -636,6 +636,7 @@ gio_base_sources = files(
   'gzlibcompressor.c',
   'gzlibdecompressor.c',
   'glistmodel.c',
+  'glistmodelview.c',
   'gliststore.c',
 )
 
@@ -783,6 +784,7 @@ gio_headers = files(
   'gzlibcompressor.h',
   'gzlibdecompressor.h',
   'glistmodel.h',
+  'glistmodelview.h',
   'gliststore.h',
 )
 
