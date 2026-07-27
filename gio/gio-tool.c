@@ -344,6 +344,12 @@ main (int argc, char **argv)
     {
       if (g_str_equal (command, gio_subcommands[i].name))
         {
+          if (g_str_equal(command, "help")) {
+            g_printerr ("gio: %s\n\n", _("Cannot display help for the subcommand: “help”"));
+            usage(TRUE);
+            return 1;
+          }
+
           g_assert (gio_subcommands[i].handle_func != NULL);
           return gio_subcommands[i].handle_func (argc, argv, do_help);
         }
