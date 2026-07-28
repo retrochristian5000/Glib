@@ -35,55 +35,64 @@
 
 #include <windows.h>
 
-static char *
-get_registry_classes_key (const char    *subdir,
-                          const wchar_t *key_name)
+/* Reads a string value from the registry under the HKCR
+ * predefined key. If @value is NULL, the default value
+ * of @subkey is retrieved. The value type is checked to
+ * be REG_SZ or REG_EXPAND_SZ
+ */
+static wchar_t *
+get_registry_classes_entry_utf16 (const wchar_t *subkey,
+                                  const wchar_t *value)
 {
-  wchar_t *wc_key;
-  HKEY reg_key = NULL;
-  DWORD key_type;
-  DWORD nbytes;
-  char *value_utf8;
+  const DWORD flags = RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ;
+  const unsigned int MAX_ITERATIONS = 10;
+  unsigned int iterations = 0;
+  wchar_t *data = NULL;
+  DWORD size = 100;
+  LSTATUS ret;
 
-  value_utf8 = NULL;
-  
-  nbytes = 0;
-  wc_key = g_utf8_to_utf16 (subdir, -1, NULL, NULL, NULL);
-  if (RegOpenKeyExW (HKEY_CLASSES_ROOT, wc_key, 0,
-                     KEY_QUERY_VALUE, &reg_key) == ERROR_SUCCESS &&
-      RegQueryValueExW (reg_key, key_name, 0,
-                        &key_type, NULL, &nbytes) == ERROR_SUCCESS &&
-      (key_type == REG_SZ || key_type == REG_EXPAND_SZ))
+retry:
+  data = g_realloc (data, size);
+  ret = RegGetValue (HKEY_CLASSES_ROOT, subkey, value, flags, NULL, data, &size);
+  if (ret == ERROR_MORE_DATA)
     {
-      wchar_t *wc_temp = g_new (wchar_t, (nbytes+1)/2 + 1);
-      RegQueryValueExW (reg_key, key_name, 0,
-                        &key_type, (LPBYTE) wc_temp, &nbytes);
-      wc_temp[nbytes/2] = '\0';
-      if (key_type == REG_EXPAND_SZ)
-        {
-          wchar_t dummy[1];
-          DWORD len = ExpandEnvironmentStringsW (wc_temp, dummy, 1);
-          if (len > 0)
-            {
-              wchar_t *wc_temp_expanded = g_new (wchar_t, len);
-              if (ExpandEnvironmentStringsW (wc_temp, wc_temp_expanded, len) == len)
-                value_utf8 = g_utf16_to_utf8 (wc_temp_expanded, -1, NULL, NULL, NULL);
-              g_free (wc_temp_expanded);
-            }
-        }
-      else
-        {
-          value_utf8 = g_utf16_to_utf8 (wc_temp, -1, NULL, NULL, NULL);
-        }
-      g_free (wc_temp);
-      
-    }
-  g_free (wc_key);
-  
-  if (reg_key != NULL)
-    RegCloseKey (reg_key);
+      if (iterations++ >= MAX_ITERATIONS)
+        goto failed;
 
-  return value_utf8;
+      goto retry;
+    }
+  else if (ret != ERROR_SUCCESS || size % 2 != 0)
+    {
+      goto failed;
+    }
+
+  return data;
+
+failed:
+  g_free (data);
+
+  return NULL;
+}
+
+static char *
+get_registry_classes_entry (const char    *subkey_utf8,
+                            const wchar_t *value)
+{
+  wchar_t *subkey_utf16;
+  wchar_t *data_utf16;
+  char *data_utf8;
+
+  subkey_utf16 = g_utf8_to_utf16 (subkey_utf8, -1, NULL, NULL, NULL);
+  if (!subkey_utf16 && subkey_utf8)
+    return NULL;
+
+  data_utf16 = get_registry_classes_entry_utf16 (subkey_utf16, value);
+  data_utf8 = g_utf16_to_utf8 (data_utf16, -1, NULL, NULL, NULL);
+
+  g_free (data_utf16);
+  g_free (subkey_utf16);
+
+  return data_utf8;
 }
 
 /*< private >*/
@@ -115,8 +124,8 @@ g_content_type_equals_impl (const gchar *type1,
     return TRUE;
 
   res = FALSE;
-  progid1 = get_registry_classes_key (type1, NULL);
-  progid2 = get_registry_classes_key (type2, NULL);
+  progid1 = get_registry_classes_entry (type1, NULL);
+  progid2 = get_registry_classes_entry (type2, NULL);
   if (progid1 != NULL && progid2 != NULL &&
       strcmp (progid1, progid2) == 0)
     res = TRUE;
@@ -140,8 +149,8 @@ g_content_type_is_a_impl (const gchar *type,
   if (g_content_type_equals (type, supertype))
     return TRUE;
 
-  perceived_type = get_registry_classes_key (type, L"PerceivedType");
-  perceived_supertype = get_registry_classes_key (supertype, L"PerceivedType");
+  perceived_type = get_registry_classes_entry (type, L"PerceivedType");
+  perceived_supertype = get_registry_classes_entry (supertype, L"PerceivedType");
 
   res = perceived_type && perceived_supertype &&
     strcmp (perceived_type, perceived_supertype) == 0;
@@ -185,10 +194,10 @@ g_content_type_get_description_impl (const gchar *type)
 
   g_return_val_if_fail (type != NULL, NULL);
 
-  progid = get_registry_classes_key (type, NULL);
+  progid = get_registry_classes_entry (type, NULL);
   if (progid)
     {
-      description = get_registry_classes_key (progid, NULL);
+      description = get_registry_classes_entry (progid, NULL);
       g_free (progid);
 
       if (description)
@@ -208,7 +217,7 @@ g_content_type_get_mime_type_impl (const gchar *type)
 
   g_return_val_if_fail (type != NULL, NULL);
 
-  mime = get_registry_classes_key (type, L"Content Type");
+  mime = get_registry_classes_entry (type, L"Content Type");
   if (mime)
     return mime;
   else if (g_content_type_is_unknown (type))
@@ -246,7 +255,7 @@ g_content_type_get_icon_impl (const gchar *type)
   if (!name && type[0] == '.')
     {
       /* double lookup by extension */
-      gchar *key = get_registry_classes_key (type, NULL);
+      gchar *key = get_registry_classes_entry (type, NULL);
       if (!key)
         key = g_strconcat (type+1, "file\\DefaultIcon", NULL);
       else
@@ -255,7 +264,7 @@ g_content_type_get_icon_impl (const gchar *type)
           g_free (key);
           key = key2;
         }
-      name = get_registry_classes_key (key, NULL);
+      name = get_registry_classes_entry (key, NULL);
       if (name && strcmp (name, "%1") == 0)
         {
           g_free (name);
@@ -346,7 +355,7 @@ g_content_type_from_mime_type_impl (const gchar *mime_type)
     return g_strdup (mime_type);
 
   key = g_strconcat ("MIME\\DataBase\\Content Type\\", mime_type, NULL);
-  content_type = get_registry_classes_key (key, L"Extension");
+  content_type = get_registry_classes_entry (key, L"Extension");
   g_free (key);
 
 
