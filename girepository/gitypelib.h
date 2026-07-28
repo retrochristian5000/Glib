@@ -28,6 +28,7 @@
 #error "Only <girepository.h> can be included directly."
 #endif
 
+#include <glib-object.h>
 #include <glib.h>
 
 #include <girepository/gi-visibility.h>

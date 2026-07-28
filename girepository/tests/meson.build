@@ -77,6 +77,9 @@ if enable_gir
     'throws' : {
       'depends': gio_gir_testing_dep,
     },
+    'type-info' : {
+      'depends': gio_gir_testing_dep,
+    },
     'union-info' : {
       'depends': glib_gir_testing_dep,
     },

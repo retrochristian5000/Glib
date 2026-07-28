@@ -634,6 +634,46 @@ gi_type_info_hash_pointer_from_argument (GITypeInfo *info,
   return gi_type_tag_hash_pointer_from_argument (storage_type, arg);
 }
 
+/**
+ * gi_type_info_serialize:
+ * @self: The GITypeInfo instance
+ * @buffer: (out caller-allocates) (length buffer_length): Allocated bytes in
+ *   which to serialize the type info.
+ * @buffer_length: Must be at least #GI_TYPE_INFO_SERIALIZE_BUFFER_LENGTH.
+ *
+ * Serialize the internal state of a GITypeInfo instance into a byte buffer.
+ * This allows storing the salient part of a GITypeInfo in a memory-efficient
+ * way, without the parts that are the same for every GITypeInfo instance, such
+ * as the GType structures.
+ *
+ * The resulting bytes can be used to recreate an identical GITypeInfo instance
+ * using gi_repository_new_type_info_from_bytes() or
+ * gi_repository_load_type_info_from_bytes().
+ *
+ * The serialization format is intended for the current process only, not to be
+ * written to disk.
+ * The length and contents may differ between versions and between platforms,
+ * and even between two processes on the same machine.
+ *
+ * It is an error to pass a buffer smaller than
+ * #GI_TYPE_INFO_SERIALIZE_BUFFER_LENGTH.
+ *
+ * Since: 2.86
+ */
+void
+gi_type_info_serialize (GITypeInfo *self,
+                        guint8 *buffer,
+                        gsize buffer_length)
+{
+  g_return_if_fail (GI_IS_TYPE_INFO (self));
+  g_return_if_fail (buffer != NULL);
+  g_return_if_fail (buffer_length >= GI_TYPE_INFO_SERIALIZE_BUFFER_LENGTH);
+
+  GIBaseInfo *real_info = GI_BASE_INFO (self);
+  memcpy (buffer, &real_info->offset, 4);
+  buffer[4] = real_info->type_is_embedded;
+}
+
 void
 gi_type_info_class_init (gpointer g_class,
                          gpointer class_data)

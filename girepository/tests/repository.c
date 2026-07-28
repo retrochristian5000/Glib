@@ -705,32 +705,6 @@ test_repository_signal_info_with_array_length_arg (RepositoryFixture *fx,
 }
 
 static void
-test_repository_type_info_name (RepositoryFixture *fx,
-                                const void *unused)
-{
-  GIInterfaceInfo *interface_info = NULL;
-  GIVFuncInfo *vfunc;
-  GITypeInfo *typeinfo;
-
-  g_test_summary ("Test that gi_base_info_get_name() returns null for GITypeInfo");
-  g_test_bug ("https://gitlab.gnome.org/GNOME/gobject-introspection/issues/96");
-
-  interface_info = GI_INTERFACE_INFO (gi_repository_find_by_name (fx->repository, "Gio", "File"));
-  g_assert_nonnull (interface_info);
-  vfunc = gi_interface_info_find_vfunc (interface_info, "read_async");
-  g_assert_nonnull (vfunc);
-
-  typeinfo = gi_callable_info_get_return_type (GI_CALLABLE_INFO (vfunc));
-  g_assert_nonnull (typeinfo);
-
-  g_assert_null (gi_base_info_get_name (GI_BASE_INFO (typeinfo)));
-
-  g_clear_pointer (&interface_info, gi_base_info_unref);
-  g_clear_pointer (&vfunc, gi_base_info_unref);
-  g_clear_pointer (&typeinfo, gi_base_info_unref);
-}
-
-static void
 test_repository_vfunc_info_with_no_invoker (RepositoryFixture *fx,
                                             const void *unused)
 {
@@ -938,7 +912,6 @@ main (int   argc,
   ADD_REPOSITORY_TEST ("/repository/instance-method-ownership-transfer", test_repository_instance_method_ownership_transfer, &typelib_load_spec_gio);
   ADD_REPOSITORY_TEST ("/repository/object-gtype-interfaces", test_repository_object_gtype_interfaces, &typelib_load_spec_gio);
   ADD_REPOSITORY_TEST ("/repository/signal-info-with-array-length-arg", test_repository_signal_info_with_array_length_arg, &typelib_load_spec_gio);
-  ADD_REPOSITORY_TEST ("/repository/type-info-name", test_repository_type_info_name, &typelib_load_spec_gio);
   ADD_REPOSITORY_TEST ("/repository/vfunc-info-with-no-invoker", test_repository_vfunc_info_with_no_invoker, &typelib_load_spec_gobject);
   ADD_REPOSITORY_TEST ("/repository/vfunc-info-with-invoker-on-interface", test_repository_vfunc_info_with_invoker_on_interface, &typelib_load_spec_gio);
   ADD_REPOSITORY_TEST ("/repository/vfunc-info-with-invoker-on-object", test_repository_vfunc_info_with_invoker_on_object, &typelib_load_spec_gio);

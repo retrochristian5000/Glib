@@ -193,6 +193,19 @@ gboolean       gi_repository_dump  (const char  *input_filename,
                                     const char  *output_filename,
                                     GError     **error);
 
+GI_AVAILABLE_IN_2_86
+GITypeInfo *gi_repository_new_type_info_from_bytes (GIRepository *self,
+                                                    GITypelib *typelib,
+                                                    GIBaseInfo *container,
+                                                    const guint8 *bytes);
+
+GI_AVAILABLE_IN_2_86
+void gi_repository_load_type_info_from_bytes (GIRepository *self,
+                                              GITypelib *typelib,
+                                              GIBaseInfo *container,
+                                              const guint8 *bytes,
+                                              GITypeInfo *stack_type_info);
+
 /**
  * GIRepositoryError:
  * @GI_REPOSITORY_ERROR_TYPELIB_NOT_FOUND: the typelib could not be found.

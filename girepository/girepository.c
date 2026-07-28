@@ -2377,3 +2377,80 @@ gi_repository_dup_default (void)
 
   return g_object_ref (instance);
 }
+
+/**
+ * gi_repository_new_type_info_from_bytes:
+ * @self: the GIRepository instance
+ * @typelib: the GITypelib obtained from
+ *   [method@GIRepository.BaseInfo.get_typelib]
+ * @container: the GIBaseInfo obtained from
+ *   [method@GIRepository.BaseInfo.get_container]
+ * @bytes: a buffer obtained from [method@GIRepository.TypeInfo.serialize]
+ *
+ * Create a new GITypeInfo from its serialized parts.
+ * This allows storing the salient part of a GITypeInfo in a memory-efficient
+ * way, without the parts that are the same for every GITypeInfo instance, such
+ * as the GType structures.
+ *
+ * Returns: (transfer full): A GITypeInfo.
+ *
+ * Since: 2.86
+ */
+GITypeInfo *
+gi_repository_new_type_info_from_bytes (GIRepository *self,
+                                        GITypelib *typelib,
+                                        GIBaseInfo *container,
+                                        const guint8 *bytes)
+{
+  g_return_val_if_fail (GI_IS_REPOSITORY (self), NULL);
+  g_return_val_if_fail (typelib != NULL, NULL);
+  g_return_val_if_fail (container == NULL || GI_IS_BASE_INFO (container), NULL);
+  g_return_val_if_fail (bytes != NULL, NULL);
+
+  guint32 offset = *(guint32 *) bytes;
+  GIBaseInfo *info = gi_info_new_full (GI_INFO_TYPE_TYPE, self, container,
+                                       typelib, offset);
+  info->type_is_embedded = bytes[4];
+
+  return GI_TYPE_INFO (info);
+}
+
+/**
+ * gi_repository_load_type_info_from_bytes:
+ * @self: the GIRepository instance
+ * @typelib: the GITypelib obtained from
+ *   [method@GIRepository.BaseInfo.get_typelib]
+ * @container: the GIBaseInfo obtained from
+ *   [method@GIRepository.BaseInfo.get_container]
+ * @bytes: a buffer obtained from [method@GIRepository.TypeInfo.serialize]
+ * @stack_type_info: (out caller-allocates): Stack-allocated GITypeInfo to be
+ *   initialized
+ *
+ * Create a new GITypeInfo from its serialized parts.
+ * This function is a variant of
+ * [method@GIRepository.Repository.new_type_info_from_bytes] designed for stack
+ * allocation.
+ *
+ * Once you are done with @stack_type_info, it must be cleared using
+ * [method@GIRepository.BaseInfo.clear].
+ *
+ * Since: 2.86
+ */
+void
+gi_repository_load_type_info_from_bytes (GIRepository *self,
+                                         GITypelib *typelib,
+                                         GIBaseInfo *container,
+                                         const guint8 *bytes,
+                                         GITypeInfo *stack_type_info)
+{
+  g_return_if_fail (GI_IS_REPOSITORY (self));
+  g_return_if_fail (typelib != NULL);
+  g_return_if_fail (container == NULL || GI_IS_BASE_INFO (container));
+  g_return_if_fail (bytes != NULL);
+
+  guint32 offset = *(guint32 *) bytes;
+  GIBaseInfo *as_base_info = (GIBaseInfo *) stack_type_info;
+  gi_info_init (as_base_info, GI_TYPE_TYPE_INFO, self, container, typelib,
+                offset);
+  as_base_info->type_is_embedded = bytes[4];
+}

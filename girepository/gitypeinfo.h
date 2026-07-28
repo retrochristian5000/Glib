@@ -30,6 +30,8 @@
 
 #include <girepository/gitypes.h>
 
+#include "gi-visibility.h"
+
 G_BEGIN_DECLS
 
 #define GI_TYPE_TYPE_INFO (gi_type_info_get_type ())
@@ -90,6 +92,15 @@ G_BEGIN_DECLS
  #define GI_TYPE_TAG_IS_CONTAINER(tag) ((tag) == GI_TYPE_TAG_ARRAY || \
     ((tag) >= GI_TYPE_TAG_GLIST && (tag) <= GI_TYPE_TAG_GHASH))
 
+/**
+ * GI_TYPE_INFO_SERIALIZE_BUFFER_LENGTH:
+ *
+ * Minimum length of a buffer passed to [method@GIRepository.TypeInfo.serialize]
+ *
+ */
+GI_AVAILABLE_MACRO_IN_2_86
+#define GI_TYPE_INFO_SERIALIZE_BUFFER_LENGTH 5
+
 GI_AVAILABLE_IN_ALL
 const char *           gi_type_tag_to_string            (GITypeTag   type);
 
@@ -140,5 +151,10 @@ void                   gi_type_tag_argument_from_hash_pointer (GITypeTag   stora
 GI_AVAILABLE_IN_ALL
 void *                 gi_type_tag_hash_pointer_from_argument (GITypeTag   storage_type,
                                                                GIArgument *arg);
+
+GI_AVAILABLE_IN_2_86
+void gi_type_info_serialize (GITypeInfo *self,
+                             guint8 *buffer,
+                             gsize buffer_length);
 
 G_END_DECLS
