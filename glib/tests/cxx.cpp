@@ -605,6 +605,15 @@ test_clear_com (void)
 }
 #endif
 
+static void
+test_common_macros (void)
+{
+  g_assert_true (MAX (1, 2) == 2);
+  g_assert_true (MIN (1.5, 2) == 1.5);
+  g_assert_true (CLAMP (1, 2, 3) == 2);
+  g_assert_true (ABS (-3.5) == 3.5);
+}
+
 int
 main (int argc, char *argv[])
 {
@@ -638,6 +647,7 @@ main (int argc, char *argv[])
   g_test_add_func ("/C++/str-has-suffix/macro", test_str_has_suffix_macro);
   g_test_add_func ("/C++/string-append", test_string_append);
   g_test_add_func ("/C++/string-free", test_string_free);
+  g_test_add_func ("/C++/common-macros", test_common_macros);
 
 #if G_CXX_STD_CHECK_VERSION(14)
 #if !defined (_MSC_VER) || _MSC_VER >= 1910 /* VS2017 */

@@ -5270,9 +5270,13 @@ g_timeout_set_expiration (GTimeoutSource *timeout_source,
           if (!session_bus_address)
             session_bus_address = g_getenv ("HOSTNAME");
           if (session_bus_address)
-            timer_perturb = ABS ((gint) g_str_hash (session_bus_address)) % 1000000;
+            {
+              timer_perturb = (int) (g_str_hash (session_bus_address) % 1000000);
+            }
           else
-            timer_perturb = 0;
+            {
+              timer_perturb = 0;
+            }
         }
 
       expiration = current_time + (guint64) timeout_source->interval * 1000 * 1000;

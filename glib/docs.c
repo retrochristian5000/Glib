@@ -946,6 +946,8 @@
  *
  * Calculates the minimum of @a and @b.
  *
+ * Note that it is an error to pass values with side-effects.
+ *
  * Returns: the minimum of @a and @b.
  */
 
@@ -955,6 +957,8 @@
  * @b: a numeric value
  *
  * Calculates the maximum of @a and @b.
+ *
+ * Note that it is an error to pass values with side-effects.
  *
  * Returns: the maximum of @a and @b.
  */
@@ -970,6 +974,8 @@
  *
  * - ABS(-10) is 10.
  * - ABS(10) is also 10.
+ *
+ * Note that it is an error to pass values with side-effects.
  *
  * Returns: the absolute value of @a.
  */
@@ -989,6 +995,8 @@
  * - CLAMP(15, 5, 10) is 10.
  * - CLAMP(20, 15, 25) is 20.
  *
+ * Note that it is an error to pass values with side-effects.
+ *
  * Returns: the value of @x clamped to the range between @low and @high
  */
 
@@ -1007,6 +1015,8 @@
  * - `G_APPROX_VALUE (3.14, 3.15, 0.001)` evaluates to false
  * - `G_APPROX_VALUE (n, 0.f, FLT_EPSILON)` evaluates to true if `n` is within
  *   the single precision floating point epsilon from zero
+ *
+ * Note that it is an error to pass values with side-effects.
  *
  * Returns: %TRUE if the two values are within the desired range
  *
