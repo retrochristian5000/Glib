@@ -2699,16 +2699,24 @@ endif
 
 # Introspection
 #
-# We depend on g-ir-scanner from gobject-introspection-1.0 to scan our source
-# to build GIR files. We then use gi-compile-repository from the local build
-# tree to build the typelibs (rather than using g-ir-compiler from
-# gobject-introspection). However, we use Meson’s gnome.generate_gir() function,
-# which adds a hard dependency on gobject-introspection-1.0, so we’d better
-# check for that here.
+# We let Meson’s gnome.generate_gir() function scan our source to build GIR
+# files and typelib repositories. This historically (meson < 1.9) required the
+# availabilty of gobject-introspection.pc and g-ir-scanner (technically
+# g-ir-compiler too, but we provide gi-compile-repository as g-ir-compiler
+# within GLib). Since Meson 1.9 – driven by the need for cross compilations –
+# gnome.generate_gir() does not require gobject-introspection.pc anymore.
+#
+# As gnome.generate_gir can’t itself conditionally ensure the existence of the
+# tools it requires and fail/skip based on their feature option, we have to
+# check for them here.
 gobject_introspection_required_version = '>= 1.80.0'
-gir_scanner = find_program('g-ir-scanner', required: get_option('introspection'), version: gobject_introspection_required_version)
-gobject_introspection = dependency('gobject-introspection-1.0', required: get_option('introspection'), version: gobject_introspection_required_version)
-enable_gir = get_option('introspection').allowed() and gir_scanner.found() and gobject_introspection.found() and meson.can_run_host_binaries()
+gir_scanner = find_program('g-ir-scanner', required: get_option('introspection'), version: gobject_introspection_required_version, native: true)
+if meson.version().version_compare('>= 1.9.0')
+  enable_gir = get_option('introspection').allowed() and gir_scanner.found() and meson.can_run_host_binaries()
+else
+  gobject_introspection = dependency('gobject-introspection-1.0', required: get_option('introspection'), version: gobject_introspection_required_version)
+  enable_gir = get_option('introspection').allowed() and gir_scanner.found() and gobject_introspection.found() and meson.can_run_host_binaries()
+endif
 
 if get_option('introspection').enabled() and not meson.can_run_host_binaries()
   error('Running binaries on the build host needs to be supported to build with -Dintrospection=enabled')
@@ -2717,7 +2725,7 @@ endif
 gir_args = [
   '--quiet',
 ]
-if gobject_introspection.version().version_compare('>=1.83.2')
+if gir_scanner.found() and gir_scanner.version().version_compare('>=1.83.2')
   gir_args += [
     '--doc-format=gi-docgen',
   ]
