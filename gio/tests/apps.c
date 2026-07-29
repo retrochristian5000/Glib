@@ -101,7 +101,7 @@ main (int argc, char **argv)
     {
       GList *results;
 
-      results = g_desktop_app_info_get_implementations (argv[2]);
+      results = g_desktop_app_info_get_for_intent (argv[2], NULL);
       print_app_list (results);
     }
   else if (g_str_equal (argv[1], "show-info"))

@@ -39,7 +39,8 @@ const gchar *myapp_data =
   "Version=1.0\n"
   "Type=Application\n"
   "Exec=true %f\n"
-  "Name=my app\n";
+  "Name=my app\n"
+  "Implements=org.freedesktop.UriHandler;org.freedesktop.Terminal\n";
 
 const gchar *myapp2_data =
   "[Desktop Entry]\n"
@@ -47,7 +48,11 @@ const gchar *myapp2_data =
   "Version=1.0\n"
   "Type=Application\n"
   "Exec=sleep %f\n"
-  "Name=my app 2\n";
+  "Name=my app 2\n"
+  "Implements=org.freedesktop.UriHandler;org.freedesktop.Terminal\n"
+  "[org.freedesktop.UriHandler]\n"
+  "Supports=example.org;x.org\n"
+  "SomeExtraData=foo;bar\n";
 
 const gchar *myapp3_data =
   "[Desktop Entry]\n"
@@ -56,7 +61,10 @@ const gchar *myapp3_data =
   "Type=Application\n"
   "Exec=sleep 1\n"
   "Name=my app 3\n"
-  "MimeType=image/png;";
+  "Implements=org.freedesktop.UriHandler\n"
+  "MimeType=image/png;"
+  "[org.freedesktop.UriHandler]\n"
+  "Supports=example.org;\n";
 
 const gchar *myapp4_data =
   "[Desktop Entry]\n"
@@ -94,6 +102,20 @@ const gchar *mimecache_data =
   "[MIME Cache]\n"
   "image/bmp=myapp4.desktop;myapp5.desktop;\n"
   "image/png=myapp3.desktop;\n";
+
+const gchar *intentapps_data =
+  "[Default Applications]\n"
+  "org.freedesktop.UriHandler=myapp2.desktop;\n"
+  "[org.freedesktop.UriHandler]\n"
+  "example.org=myapp3.desktop;\n";
+
+const gchar *intentcache_data =
+  "[Intent Cache]\n"
+  "org.freedesktop.Terminal=myapp.desktop;myapp2.desktop;\n"
+  "org.freedesktop.UriHandler=myapp.desktop;myapp2.desktop;myapp3.desktop;\n"
+  "[org.freedesktop.UriHandler]\n"
+  "x.org=myapp2.desktop;\n"
+  "example.org=myapp2.desktop;myapp3.desktop\n";
 
 typedef struct
 {
@@ -208,6 +230,43 @@ setup (Fixture       *fixture,
   name = g_build_filename (apphome, "mimeinfo.cache", NULL);
   g_test_message ("creating '%s'", name);
   g_file_set_contents (name, mimecache_data, -1, &error);
+  g_assert_no_error (error);
+  g_free (name);
+
+  if (!GPOINTER_TO_INT (test_data))
+    {
+      name = g_build_filename (apphome, "intentapps.list", NULL);
+    }
+  else
+    {
+      GFile *file_a = NULL, *file_b = NULL, *appdir = NULL;
+
+      /*
+       * Ensure intentapps.list can be reachable via a symlink chain.
+      */
+      appdir = g_file_new_for_path (apphome);
+      file_a = g_file_get_child (appdir, "intentapps.list");
+      g_file_make_symbolic_link (file_a, "intentapps.list.b", NULL, &error);
+      g_assert_no_error (error);
+      g_object_unref (file_a);
+
+      file_b = g_file_get_child (appdir, "intentapps.list.b");
+      g_file_make_symbolic_link (file_b, "intentapps.list.c", NULL, &error);
+      g_assert_no_error (error);
+      g_object_unref (file_b);
+
+      g_object_unref (appdir);
+      name = g_build_filename (apphome, "intentapps.list.c", NULL);
+    }
+
+  g_test_message ("creating '%s'", name);
+  g_file_set_contents (name, intentapps_data, -1, &error);
+  g_assert_no_error (error);
+  g_free (name);
+
+  name = g_build_filename (apphome, "intent.cache", NULL);
+  g_test_message ("creating '%s'", name);
+  g_file_set_contents (name, intentcache_data, -1, &error);
   g_assert_no_error (error);
   g_free (name);
 
@@ -638,6 +697,54 @@ test_mime_ignore_nonexisting (Fixture       *fixture,
 }
 
 static void
+test_intent_api (Fixture       *fixture,
+                 gconstpointer  test_data)
+{
+  GAppInfo *appinfo;
+  GAppInfo *appinfo2;
+  GAppInfo *appinfo3;
+  GAppInfo *def;
+  GList *infos, *l;
+
+  appinfo = (GAppInfo*)g_desktop_app_info_new ("myapp.desktop");
+  appinfo2 = (GAppInfo*)g_desktop_app_info_new ("myapp2.desktop");
+  appinfo3 = (GAppInfo*)g_desktop_app_info_new ("myapp3.desktop");
+
+  def = g_desktop_app_info_get_default_for_intent ("org.freedesktop.NonExisting", NULL);
+  g_assert_null (def);
+
+  def = g_desktop_app_info_get_default_for_intent ("org.freedesktop.Terminal", NULL);
+  g_assert_nonnull (def);
+  g_object_unref (def);
+
+  def = g_desktop_app_info_get_default_for_intent ("org.freedesktop.Terminal", "NonExistingScope");
+  g_assert_null (def);
+
+  def = g_desktop_app_info_get_default_for_intent ("org.freedesktop.UriHandler", NULL);
+  g_assert_nonnull (def);
+  g_assert_true (g_app_info_equal (def, appinfo2));
+  g_object_unref (def);
+
+  def = g_desktop_app_info_get_default_for_intent ("org.freedesktop.UriHandler", "example.org");
+  g_assert_nonnull (def);
+  g_assert_true (g_app_info_equal (def, appinfo3));
+  g_object_unref (def);
+
+  infos = g_desktop_app_info_get_for_intent ("org.freedesktop.UriHandler", "example.org");
+  l = infos;
+  g_assert_nonnull (l->data);
+  g_assert_true (g_app_info_equal (l->data, appinfo3));
+  l = l->next;
+  g_assert_nonnull (l->data);
+  g_assert_true (g_app_info_equal (l->data, appinfo2));
+
+  g_list_free_full (infos, g_object_unref);
+  g_object_unref (appinfo);
+  g_object_unref (appinfo2);
+  g_object_unref (appinfo3);
+}
+
+static void
 test_all (Fixture       *fixture,
           gconstpointer  test_data)
 {
@@ -681,6 +788,12 @@ main (int argc, char *argv[])
               test_mime_default_last_used, teardown);
   g_test_add ("/appinfo/mime-symlinked/ignore-nonexisting", Fixture, GINT_TO_POINTER (TRUE), setup,
               test_mime_ignore_nonexisting, teardown);
+
+  g_test_add ("/appinfo/intent/api", Fixture, GINT_TO_POINTER (FALSE), setup,
+              test_intent_api, teardown);
+
+  g_test_add ("/appinfo/intent-symlinked/api", Fixture, GINT_TO_POINTER (TRUE), setup,
+              test_intent_api, teardown);
 
   g_test_add ("/appinfo/all", Fixture, NULL, setup, test_all, teardown);
 
