@@ -117,6 +117,7 @@ if host_system == 'windows'
       '--library=gobject-2.0',
     ],
   )
+  glib_platform_gir = glib_win32_gir
 else
   glib_unix_gir = gnome.generate_gir(libglib,
     sources: [
@@ -148,6 +149,7 @@ else
       '--c-include=glib-unix.h',
     ],
   )
+  glib_platform_gir = glib_unix_gir
 endif
 
 # GObject
@@ -306,6 +308,43 @@ else
   )
   gio_platform_gir = gio_unix_gir
 endif
+
+# GIBase
+
+gibase_dep = declare_dependency(
+  sources: [
+    glib_gir[0], glib_platform_gir[0],
+    gobject_gir[0],
+    gmodule_gir[0],
+    gio_gir[0], gio_platform_gir[0]
+  ],
+  dependencies: [
+    libglib_dep,
+    libgobject_dep,
+    libgmodule_dep,
+    libgio_dep
+  ],
+  variables: {
+    'provider': 'glib',
+    # Export the path for the built GLib-2.0.typelib (etc.) for when GLib is
+    # used as a subproject. The variable names match those in
+    # pkgconfig_variables below.
+    'girdir': meson.current_build_dir(),
+    'typelibdir': meson.current_build_dir(),
+  }
+)
+
+pkg.generate(
+  name: 'gi-base-1.0',
+  version: glib_version,
+  filebase: 'gi-base-1.0',
+  install_dir: glib_pkgconfigreldir,
+  description: 'Provides GIR files for core GLib libraries',
+  variables: ['provider=glib'] + pkgconfig_variables,
+  libraries: [libglib_dep, libgobject_dep, libgmodule_dep, libgio_dep],
+)
+
+meson.override_dependency('gi-base-1.0', gibase_dep)
 
 # GIRepository
 libgirepository_gir_sources = [

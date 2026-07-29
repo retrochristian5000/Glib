@@ -248,6 +248,48 @@ pkg.generate(libgirepository,
   libraries: [libglib_dep, libgobject_dep],
 )
 
+python_dep = python.dependency(embed: true, required: get_option('ir_generator'))
+# The python dependency from pymod is very buggy in cross-builds (mesonbuild#12540)
+if python_dep.found() and not cc.has_header('Python.h', dependencies: python_dep)
+  python_dep = dependency('', required: false)
+endif
+flex = find_program('flex', 'win_flex', required: get_option('ir_generator'))
+bison = find_program('bison', 'win_bison', required: get_option('ir_generator'))
+if python_dep.found() and flex.found() and bison.found()
+  subdir('scanner')
+else
+  gi_generate_repo_bin = find_program('gi-generate-repository', required: false)
+endif
+
+# Introspection
+#
+# If we have gi-generate-repository (either from our local build tree or from
+# the system) and our meson is new enough, we use it to scan our source to build
+# GIR files. Otherwise we fall back to g-ir-scanner from
+# gobject-introspection-1.0 for the same task. We then use gi-compile-repository
+# from the local build tree to build the typelibs (rather than using
+# g-ir-compiler from gobject-introspection). However, we use Meson’s
+# gnome.generate_gir() function, which historically added a hard dependency on
+# gobject-introspection-1.0, we'll check for this here if we believe the
+# conditions are met where meson would do this.
+
+gir_args = [
+  '--quiet'
+]
+
+if gi_generate_repo_bin.found() and meson.version().version_compare('>= 1.11.0') # TODO: meson version that has support for using gi-generate-repository in gnome.generate_gir
+  enable_gir = get_option('introspection').disable_auto_if(meson.is_cross_build()).require(meson.can_run_host_binaries()).allowed()
+  gir_args += '--doc-format=gi-docgen'
+else
+  gi_required_version = '>= 1.80.0'
+  gi_dep = dependency('gobject-introspection-1.0', required: get_option('introspection'), version: gi_required_version)
+  gi_scanner = find_program('g-ir-scanner', required: get_option('introspection').require(meson.can_run_host_binaries()), version: gi_required_version)
+  enable_gir = gi_dep.found() and gi_scanner.found()
+  if gi_dep.found() and gi_dep.version().version_compare('>=1.83.2')
+    gir_args += '--doc-format=gi-docgen'
+  endif
+endif
+
 subdir('compiler')
 
 if enable_gir

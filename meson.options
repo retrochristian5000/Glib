@@ -146,6 +146,12 @@ option('gir_dir_prefix',
        type: 'string',
        description: 'Intermediate prefix for gir installation under ${prefix}')
 
+option('ir_generator',
+       type: 'feature',
+       value: 'auto',
+       description: 'Build gi-generate-repository (requires libpython)'
+)
+
 option('introspection',
        type: 'feature',
        value: 'auto',
