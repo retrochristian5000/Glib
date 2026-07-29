@@ -690,7 +690,6 @@ _g_dbus_auth_run_client (GDBusAuth     *auth,
             goto out;
           debug_print ("CLIENT: WaitingForReject, read '%s'", line);
 
-        choose_mechanism:
           if (!g_str_has_prefix (line, "REJECTED "))
             {
               g_set_error (error,
@@ -709,6 +708,7 @@ _g_dbus_auth_run_client (GDBusAuth     *auth,
                 g_printerr ("supported_auth_mechs[%d] = '%s'\n", n, supported_auth_mechs[n]);
 #endif
             }
+        choose_mechanism:
           g_free (line);
           mech = client_choose_mech_and_send_initial_response (auth,
                                                                credentials,
@@ -765,7 +765,7 @@ _g_dbus_auth_run_client (GDBusAuth     *auth,
                   goto out;
                 }
             }
-          else if (g_str_has_prefix (line, "REJECTED "))
+          else if (g_str_has_prefix (line, "REJECTED"))
             {
               goto choose_mechanism;
             }
