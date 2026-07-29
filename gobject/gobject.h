@@ -233,18 +233,24 @@ typedef void (*GObjectFinalizeFunc)     (GObject      *object);
  * GWeakNotify:
  * @data: data that was provided when the weak reference was established
  * @where_the_object_was: the object being disposed
- * 
+ *
  * A #GWeakNotify function can be added to an object as a callback that gets
- * triggered when the object is finalized.
+ * triggered when an object is disposed.
  *
- * Since the object is already being disposed when the #GWeakNotify is called,
- * there's not much you could do with the object, apart from e.g. using its
- * address as hash-index or the like.
+ * At that time, the object is being disposed, but still mostly alive. For
+ * example, new references or weak notifications can be taken. Such
+ * resurrection or half destroyed objects should be avoided and needs great
+ * care.
  *
- * In particular, this means it’s invalid to call g_object_ref(),
- * g_weak_ref_init(), g_weak_ref_set(), g_object_add_toggle_ref(),
- * g_object_weak_ref(), g_object_add_weak_pointer() or any function which calls
- * them on the object from this callback.
+ * Also, if a weak notification is added during dispose, it will be emitted
+ * right before finalize. At that time, the reference count of the object already
+ * dropped to zero and taking another reference or registering new weak references
+ * is no longer allowed.
+ *
+ * If the weak notification was registered via g_object_weak_ref_full() with
+ * synchronizing enabled, then a per-registration lock is held while the callback
+ * is invoked. This allows to synchronize with g_object_weak_unref_full() but also
+ * has the potential for deadlock. See also g_object_weak_unref_full().
  */
 typedef void (*GWeakNotify)		(gpointer      data,
 					 GObject      *where_the_object_was);
@@ -521,6 +527,21 @@ GOBJECT_AVAILABLE_IN_ALL
 void	    g_object_weak_unref		      (GObject	      *object,
 					       GWeakNotify     notify,
 					       gpointer	       data);
+
+GOBJECT_AVAILABLE_IN_2_86
+void g_object_weak_ref_full (GObject *object,
+                             GWeakNotify notify,
+                             gpointer data,
+                             GDestroyNotify destroy,
+                             gboolean synchronize);
+
+GOBJECT_AVAILABLE_IN_2_86
+gboolean g_object_weak_unref_full (GObject *object,
+                                   GWeakNotify notify,
+                                   gpointer data,
+                                   gboolean synchronize,
+                                   gboolean steal_data);
+
 GOBJECT_AVAILABLE_IN_ALL
 void        g_object_add_weak_pointer         (GObject        *object, 
                                                gpointer       *weak_pointer_location);
