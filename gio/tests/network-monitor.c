@@ -107,6 +107,20 @@ TestAddress unmatched[] = {
 GInetAddressMask *ip4_default, *ip6_default;
 
 static void
+async_result_cb (GObject      *source_object,
+                 GAsyncResult *result,
+                 void         *user_data)
+{
+  GAsyncResult **result_out = user_data;
+
+  g_assert (result_out != NULL);
+  g_assert (*result_out == NULL);
+
+  *result_out = g_object_ref (result);
+  g_main_context_wakeup (g_main_context_get_thread_default ());
+}
+
+static void
 notify_handler (GObject    *object,
                 GParamSpec *pspec,
                 gpointer    user_data)
@@ -260,6 +274,50 @@ test_default (void)
   assert_signals (monitor, FALSE, FALSE, TRUE);
 
   g_object_unref (monitor);
+}
+
+static void
+test_default_async (void)
+{
+  GAsyncResult *result = NULL;
+  GNetworkMonitor *monitor = NULL;
+  GError *local_error = NULL;
+
+  g_network_monitor_get_default_async (NULL, async_result_cb, &result);
+
+  while (result == NULL)
+    g_main_context_iteration (NULL, TRUE);
+
+  monitor = g_network_monitor_get_default_finish (result, &local_error);
+  g_assert_no_error (local_error);
+  g_assert_true (G_IS_NETWORK_MONITOR (monitor));
+
+  g_clear_object (&monitor);
+  g_clear_object (&result);
+}
+
+static void
+test_default_async_cancellation (void)
+{
+  GAsyncResult *result = NULL;
+  GNetworkMonitor *monitor = NULL;
+  GCancellable *cancellable = NULL;
+  GError *local_error = NULL;
+
+  cancellable = g_cancellable_new ();
+  g_cancellable_cancel (cancellable);
+  g_network_monitor_get_default_async (cancellable, async_result_cb, &result);
+
+  while (result == NULL)
+    g_main_context_iteration (NULL, TRUE);
+
+  monitor = g_network_monitor_get_default_finish (result, &local_error);
+  g_assert_error (local_error, G_IO_ERROR, G_IO_ERROR_CANCELLED);
+  g_assert_null (monitor);
+
+  g_clear_error (&local_error);
+  g_clear_object (&result);
+  g_clear_object (&cancellable);
 }
 
 static void
@@ -515,8 +573,24 @@ watch_metered_changed (GNetworkMonitor *monitor,
 static void
 do_watch_network (void)
 {
-  GNetworkMonitor *monitor = g_network_monitor_get_default ();
-  GMainLoop *loop;
+  GNetworkMonitor *monitor = NULL;
+  GMainLoop *loop = NULL;
+  GAsyncResult *result = NULL;
+  GError *local_error = NULL;
+
+  g_network_monitor_get_default_async (NULL, async_result_cb, &result);
+
+  while (result == NULL)
+    g_main_context_iteration (NULL, TRUE);
+
+  monitor = g_network_monitor_get_default_finish (result, &local_error);
+  g_clear_object (&result);
+
+  if (monitor == NULL)
+    {
+      g_printerr ("Couldn’t get monitor: %s\n", local_error->message);
+      exit (1);
+    }
 
   g_print ("Monitoring via %s\n", g_type_name_from_instance ((GTypeInstance *) monitor));
 
@@ -532,6 +606,9 @@ do_watch_network (void)
 
   loop = g_main_loop_new (NULL, FALSE);
   g_main_loop_run (loop);
+
+  g_clear_pointer (&loop, g_main_loop_unref);
+  g_clear_object (&monitor);
 }
 
 #ifdef HAVE_NETLINK
@@ -619,6 +696,93 @@ test_netlink_can_reach_loopback6 (void)
 #endif
 }
 
+static void
+test_initable (void)
+{
+  GIOExtensionPoint *extension_point = NULL;
+
+  g_test_summary ("Test that initialising each of the registered network monitors either succeeds or errors, but doesn’t crash");
+
+  extension_point = g_io_extension_point_lookup (G_NETWORK_MONITOR_EXTENSION_POINT_NAME);
+  g_assert_nonnull (extension_point);
+
+  for (GList *l = g_io_extension_point_get_extensions (extension_point); l != NULL; l = l->next)
+    {
+      GIOExtension *extension = l->data;
+      GType type = g_io_extension_get_type (extension);
+      GInitable *instance = NULL;
+      GError *local_error = NULL;
+
+      instance = g_initable_new (type, NULL, &local_error, NULL);
+      if (instance != NULL)
+        {
+          g_assert_no_error (local_error);
+          g_test_message ("Success initialising instance of %s", g_type_name (type));
+        }
+      else
+        {
+          g_assert_nonnull (local_error);
+          g_test_message ("Failed to initialise instance of %s: %s", g_type_name (type), local_error->message);
+        }
+
+      g_clear_object (&instance);
+      g_clear_error (&local_error);
+    }
+}
+
+static void
+test_initable_async (void)
+{
+  GIOExtensionPoint *extension_point = NULL;
+
+  g_test_summary ("Test that asynchronously initialising each of the registered network monitors either succeeds or errors, but doesn’t crash");
+
+  extension_point = g_io_extension_point_lookup (G_NETWORK_MONITOR_EXTENSION_POINT_NAME);
+  g_assert_nonnull (extension_point);
+
+  for (GList *l = g_io_extension_point_get_extensions (extension_point); l != NULL; l = l->next)
+    {
+      GIOExtension *extension = l->data;
+      GType type = g_io_extension_get_type (extension);
+      GAsyncResult *result = NULL;
+      GObject *source_object = NULL;
+      GObject *instance = NULL;
+      GError *local_error = NULL;
+
+      if (!G_TYPE_IS_ASYNC_INITABLE (type))
+        {
+          g_test_message ("Skipping %s as it’s not async initable", g_type_name (type));
+          continue;
+        }
+
+      /* We require types to be initable if they are async initable */
+      g_assert_true (G_TYPE_IS_INITABLE (type));
+
+      g_async_initable_new_async (type, G_PRIORITY_DEFAULT, NULL, async_result_cb, &result, NULL);
+
+      while (result == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+      source_object = g_async_result_get_source_object (result);
+      instance = g_async_initable_new_finish (G_ASYNC_INITABLE (source_object), result, &local_error);
+      if (instance != NULL)
+        {
+          g_assert_no_error (local_error);
+          g_test_message ("Success initialising instance of %s", g_type_name (type));
+        }
+      else
+        {
+          g_assert_nonnull (local_error);
+          g_test_message ("Failed to initialise instance of %s: %s", g_type_name (type), local_error->message);
+        }
+
+      g_clear_object (&source_object);
+      g_clear_object (&instance);
+      g_clear_error (&local_error);
+      g_clear_object (&result);
+    }
+}
+
 int
 main (int argc, char **argv)
 {
@@ -657,11 +821,15 @@ main (int argc, char **argv)
   ip6_default = g_inet_address_mask_new_from_string ("::/0", NULL);
 
   g_test_add_func ("/network-monitor/default", test_default);
+  g_test_add_func ("/network-monitor/default-async", test_default_async);
+  g_test_add_func ("/network-monitor/default-async/cancellation", test_default_async_cancellation);
   g_test_add_func ("/network-monitor/remove_default", test_remove_default);
   g_test_add_func ("/network-monitor/add_networks", test_add_networks);
   g_test_add_func ("/network-monitor/remove_networks", test_remove_networks);
   g_test_add_func ("/network-monitor/netlink/can-reach-loopback", test_netlink_can_reach_loopback);
   g_test_add_func ("/network-monitor/netlink/can-reach-loopback6", test_netlink_can_reach_loopback6);
+  g_test_add_func ("/network-monitor/initable", test_initable);
+  g_test_add_func ("/network-monitor/initable-async", test_initable_async);
 
   ret = g_test_run ();
 

@@ -20,15 +20,18 @@
 
 #include "config.h"
 
+#include "gasyncinitable.h"
 #include "gnetworkmonitorportal.h"
 #include "ginitable.h"
 #include "giomodule-priv.h"
 #include "xdp-dbus.h"
 #include "gportalsupport.h"
+#include "gtask.h"
 
 static GInitableIface *initable_parent_iface;
 static void g_network_monitor_portal_iface_init (GNetworkMonitorInterface *iface);
 static void g_network_monitor_portal_initable_iface_init (GInitableIface *iface);
+static void g_network_monitor_portal_async_initable_iface_init (GAsyncInitableIface *iface);
 
 enum
 {
@@ -54,6 +57,8 @@ G_DEFINE_TYPE_WITH_CODE (GNetworkMonitorPortal, g_network_monitor_portal, G_TYPE
                                                 g_network_monitor_portal_iface_init)
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
                                                 g_network_monitor_portal_initable_iface_init)
+                         G_IMPLEMENT_INTERFACE (G_TYPE_ASYNC_INITABLE,
+                                                g_network_monitor_portal_async_initable_iface_init)
                          _g_io_modules_ensure_extension_points_registered ();
                          g_io_extension_point_implement (G_NETWORK_MONITOR_EXTENSION_POINT_NAME,
                                                          g_define_type_id,
@@ -413,15 +418,23 @@ proxy_properties_changed (GDBusProxy            *proxy,
   if (should_emit_changed)
     g_signal_emit_by_name (nm, "network-changed", nm->priv->available);
 }
-                           
+
+static void proxy_ready_cb (GObject      *source_object,
+                            GAsyncResult *result,
+                            void         *user_data);
+static gboolean finish_init (GNetworkMonitorPortal  *self,
+                             GDBusProxy             *proxy,
+                             GCancellable           *cancellable,
+                             GError                **error);
+
 static gboolean
 g_network_monitor_portal_initable_init (GInitable     *initable,
                                         GCancellable  *cancellable,
                                         GError       **error)
 {
   GNetworkMonitorPortal *nm = G_NETWORK_MONITOR_PORTAL (initable);
-  GDBusProxy *proxy;
-  gchar *name_owner = NULL;
+  GDBusProxy *proxy = NULL;
+  gboolean retval;
 
   nm->priv->available = FALSE;
   nm->priv->metered = FALSE;
@@ -441,14 +454,86 @@ g_network_monitor_portal_initable_init (GInitable     *initable,
                                          "org.freedesktop.portal.NetworkMonitor",
                                          cancellable,
                                          error);
-  if (!proxy)
+  if (proxy == NULL)
     return FALSE;
+
+  retval = finish_init (nm, proxy, cancellable, error);
+  g_clear_object (&proxy);
+  return retval;
+}
+
+static void
+g_network_monitor_portal_async_initable_init_async (GAsyncInitable      *initable,
+                                                    int                  io_priority,
+                                                    GCancellable        *cancellable,
+                                                    GAsyncReadyCallback  callback,
+                                                    void                *user_data)
+{
+  GNetworkMonitorPortal *nm = G_NETWORK_MONITOR_PORTAL (initable);
+  GTask *task = NULL;
+
+  task = g_task_new (initable, cancellable, callback, user_data);
+  g_task_set_source_tag (task, g_network_monitor_portal_async_initable_init_async);
+
+  nm->priv->available = FALSE;
+  nm->priv->metered = FALSE;
+  nm->priv->connectivity = G_NETWORK_CONNECTIVITY_LOCAL;
+
+  if (!glib_should_use_portal ())
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED, "Not using portals");
+      g_clear_object (&task);
+      return;
+    }
+
+  g_dbus_proxy_new_for_bus (G_BUS_TYPE_SESSION,
+                            G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES,
+                            NULL,
+                            "org.freedesktop.portal.Desktop",
+                            "/org/freedesktop/portal/desktop",
+                            "org.freedesktop.portal.NetworkMonitor",
+                            cancellable,
+                            proxy_ready_cb,
+                            g_steal_pointer (&task));
+}
+
+static void
+proxy_ready_cb (GObject      *source_object,
+                GAsyncResult *result,
+                void         *user_data)
+{
+  GTask *task = g_steal_pointer (&user_data);
+  GNetworkMonitorPortal *self = g_task_get_source_object (task);
+  GCancellable *cancellable = g_task_get_cancellable (task);
+  GDBusProxy *proxy = NULL;
+  GError *local_error = NULL;
+
+  proxy = g_dbus_proxy_new_for_bus_finish (result, &local_error);
+
+  if (proxy == NULL ||
+      !finish_init (self, proxy, cancellable, &local_error))
+    g_task_return_error (task, g_steal_pointer (&local_error));
+  else
+    g_task_return_boolean (task, TRUE);
+
+  g_clear_object (&proxy);
+  g_clear_object (&task);
+}
+
+static gboolean
+finish_init (GNetworkMonitorPortal  *self,
+             GDBusProxy             *proxy,
+             GCancellable           *cancellable,
+             GError                **error)
+{
+  char *name_owner = NULL;
+
+  g_assert (proxy != NULL);
 
   name_owner = g_dbus_proxy_get_name_owner (proxy);
 
   if (!name_owner)
     {
-      g_object_unref (proxy);
       g_set_error (error,
                    G_DBUS_ERROR,
                    G_DBUS_ERROR_NAME_HAS_NO_OWNER,
@@ -458,19 +543,27 @@ g_network_monitor_portal_initable_init (GInitable     *initable,
 
   g_free (name_owner);
 
-  g_signal_connect (proxy, "g-signal", G_CALLBACK (proxy_signal), nm);
-  g_signal_connect (proxy, "g-properties-changed", G_CALLBACK (proxy_properties_changed), nm);
+  g_signal_connect (proxy, "g-signal", G_CALLBACK (proxy_signal), self);
+  g_signal_connect (proxy, "g-properties-changed", G_CALLBACK (proxy_properties_changed), self);
 
-  nm->priv->proxy = proxy;
-  nm->priv->has_network = glib_network_available_in_sandbox ();
+  self->priv->proxy = g_object_ref (proxy);
+  self->priv->has_network = glib_network_available_in_sandbox ();
 
-  if (!initable_parent_iface->init (initable, cancellable, error))
+  if (!initable_parent_iface->init (G_INITABLE (self), cancellable, error))
     return FALSE;
 
-  if (nm->priv->has_network)
-    update_properties (proxy, nm);
+  if (self->priv->has_network)
+    update_properties (proxy, self);
 
   return TRUE;
+}
+
+static gboolean
+g_network_monitor_portal_async_initable_init_finish (GAsyncInitable  *initable,
+                                                     GAsyncResult    *result,
+                                                     GError         **error)
+{
+  return g_task_propagate_boolean (G_TASK (result), error);
 }
 
 static void
@@ -626,4 +719,11 @@ g_network_monitor_portal_initable_iface_init (GInitableIface *iface)
   initable_parent_iface = g_type_interface_peek_parent (iface);
 
   iface->init = g_network_monitor_portal_initable_init;
+}
+
+static void
+g_network_monitor_portal_async_initable_iface_init (GAsyncInitableIface *iface)
+{
+  iface->init_async = g_network_monitor_portal_async_initable_init_async;
+  iface->init_finish = g_network_monitor_portal_async_initable_init_finish;
 }

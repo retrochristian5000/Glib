@@ -22,6 +22,8 @@
 #include "glib.h"
 #include "glibintl.h"
 
+#include "gasyncresult.h"
+#include "gcancellable.h"
 #include "gnetworkmonitor.h"
 #include "ginetaddress.h"
 #include "ginetsocketaddress.h"
@@ -36,9 +38,26 @@
  * `GNetworkMonitor` provides an easy-to-use cross-platform API
  * for monitoring network connectivity. On Linux, the available
  * implementations are based on the kernel's netlink interface and
- * on NetworkManager.
+ * on NetworkManager. If systemd-networkd is available, it will be
+ * used to speed up reachability queries.
  *
  * There is also an implementation for use inside Flatpak sandboxes.
+ *
+ * Many `GNetworkMonitor` implementations do asynchronous operations
+ * on initialization in order to reach the right state, and hence may
+ * implement [iface@Gio.AsyncInitable] since GLib 2.90. If they do,
+ * this should be used in preference to the original [iface@Gio.Initable]
+ * interface, as it allows for notification of when initialization is
+ * complete.
+ *
+ * Any `GNetworkMonitor` implementation which implements
+ * [iface@Gio.AsyncInitable] must also implement [iface@Gio.Initable] in order
+ * to allow [func@Gio.NetworkMonitor.get_default] to initialize it.
+ *
+ * Note that [func@Gio.NetworkMonitor.get_default_finish] returns a strong
+ * reference to the constructed [iface@Gio.NetworkMonitor], which is not cached.
+ * Callers are responsible for holding a reference to the monitor for as long as
+ * they are using it.
  *
  * Since: 2.32
  */
@@ -82,6 +101,16 @@ static GNetworkMonitor *network_monitor_default_singleton = NULL;  /* (owned) (a
  * the state is resolved from the thread-default main context of this first
  * call.
  *
+ * For simpler notification of when initialization is complete, it is preferable
+ * to use the [iface@Gio.AsyncInitable] interface to initialize a network
+ * monitor, if it is implemented (since GLib 2.90). Not all network monitors
+ * implement that interface though. See
+ * [func@Gio.NetworkMonitor.get_default_async].
+ *
+ * If both [func@Gio.NetworkMonitor.get_default] and
+ * [func@Gio.NetworkMonitor.get_default_async] are called in the same process,
+ * they will return the same result.
+ *
  * Returns: (not nullable) (transfer none): a #GNetworkMonitor, which will be
  *     a dummy object if no network monitor is available
  *
@@ -102,6 +131,113 @@ g_network_monitor_get_default (void)
     }
 
   return network_monitor_default_singleton;
+}
+
+static void get_default_cb (GObject      *source_object,
+                            GAsyncResult *result,
+                            void         *user_data);
+
+/**
+ * g_network_monitor_get_default_async:
+ * @cancellable: a cancellable
+ * @callback: a callback for task completion
+ * @user_data: data to pass to @callback
+ *
+ * Gets the default network monitor, allowing for asynchronous initialization.
+ *
+ * This behaves similarly to [func@Gio.NetworkMonitor.get_default] except it
+ * allows for asynchronous initialization of the monitor. This is useful for
+ * several backends which need to perform IPC to get their initial state, and
+ * it should be preferred over [func@Gio.NetworkMonitor.get_default].
+ *
+ * It differs from [func@Gio.NetworkMonitor.get_default] in that its finish
+ * function returns a strong reference to the monitor. The monitor instance is
+ * cached so that multiple calls to [func@Gio.NetworkMonitor.get_default_async]
+ * return the same instance, but the cached instance is finalized once all the
+ * returned strong references to it are dropped. In contrast,
+ * [func@Gio.NetworkMonitor.get_default] caches its return value indefinitely.
+ *
+ * If both [func@Gio.NetworkMonitor.get_default] and
+ * [func@Gio.NetworkMonitor.get_default_async] are called in the same process,
+ * they will return the same result.
+ *
+ * Since: 2.90
+ */
+void
+g_network_monitor_get_default_async (GCancellable        *cancellable,
+                                     GAsyncReadyCallback  callback,
+                                     void                *user_data)
+{
+  GTask *task = NULL;
+  GNetworkMonitor *monitor;
+
+  g_return_if_fail (cancellable == NULL || G_IS_CANCELLABLE (cancellable));
+
+  task = g_task_new (NULL, cancellable, callback, user_data);
+  g_task_set_source_tag (task, g_network_monitor_get_default_async);
+
+  /* If the old-style singleton has already been created, return that. */
+  monitor = g_atomic_pointer_get (&network_monitor_default_singleton);
+  if (monitor != NULL)
+    {
+      g_task_return_pointer (task, g_object_ref (monitor), g_object_unref);
+      g_clear_object (&task);
+      return;
+    }
+
+  /* We don’t need to mutex calls to _g_io_module_get_default_async() as it
+   * performs deduplication/locking internally, and guarantees that all calls to
+   * it will (eventually) return the same result. */
+  _g_io_module_get_default_async (G_NETWORK_MONITOR_EXTENSION_POINT_NAME,
+                                  "GIO_USE_NETWORK_MONITOR",
+                                  NULL,
+                                  cancellable,
+                                  get_default_cb,
+                                  g_steal_pointer (&task));
+}
+
+static void
+get_default_cb (GObject      *source_object,
+                GAsyncResult *result,
+                void         *user_data)
+{
+  GTask *task = g_steal_pointer (&user_data);
+  GNetworkMonitor *monitor = NULL;
+  GError *local_error = NULL;
+
+  monitor = _g_io_module_get_default_finish (result, &local_error);
+  if (monitor != NULL)
+    g_task_return_pointer (task, g_steal_pointer (&monitor), g_object_unref);
+  else
+    g_task_return_error (task, g_steal_pointer (&local_error));
+}
+
+/**
+ * g_network_monitor_get_default_finish:
+ * @result: an async result
+ * @error: return location for an error
+ *
+ * Finishes getting the default network monitor, as started by
+ * [func@Gio.NetworkMonitor.get_default_async].
+ *
+ * If this function is called multiple times, the same (singleton) instance of
+ * [iface@Gio.NetworkMonitor] will be returned, but it will not be cached after
+ * the final strong reference to it is dropped by the callers. This is in
+ * contrast to [func@Gio.NetworkMonitor.get_default], which caches its return
+ * value for the lifetime of the process.
+ *
+ * Returns: (transfer full): an instance of the default network monitor
+ * Since: 2.90
+ */
+GNetworkMonitor *
+g_network_monitor_get_default_finish (GAsyncResult  *result,
+                                      GError       **error)
+{
+  g_return_val_if_fail (g_task_is_valid (result, NULL), NULL);
+  g_return_val_if_fail (g_async_result_is_tagged (result, g_network_monitor_get_default_async), NULL);
+  g_return_val_if_fail (error == NULL || *error == NULL, NULL);
+
+  return g_task_propagate_pointer (G_TASK (result), error);
 }
 
 /**
