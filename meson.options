@@ -37,6 +37,11 @@ option('libmount',
        value : 'auto',
        description : 'build with libmount support')
 
+option('android',
+       type : 'feature',
+       value : 'auto',
+       description : 'build glib with android application support')
+
 option('man',
        type : 'boolean',
        value : false,

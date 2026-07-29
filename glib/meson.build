@@ -389,6 +389,12 @@ else
   platform_deps = []
 endif
 
+if build_android_platform
+  glib_sources += files('glib-android.c')
+  glib_android_headers = files('glib-android.h')
+  install_headers(glib_android_headers, install_dir : glib_includedir)
+endif
+
 if host_system == 'linux'
   glib_sources += files('gjournal-private.c')
 endif
