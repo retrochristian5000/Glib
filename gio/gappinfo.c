@@ -1171,36 +1171,47 @@ g_app_info_launch_default_for_uri (const char         *uri,
                                    GAppLaunchContext  *launch_context,
                                    GError            **error)
 {
-  char *uri_scheme;
-  GAppInfo *app_info = NULL;
   gboolean res = FALSE;
 
-  /* g_file_query_default_handler() calls
-   * g_app_info_get_default_for_uri_scheme() too, but we have to do it
-   * here anyway in case GFile can't parse @uri correctly.
-   */
-  uri_scheme = g_uri_parse_scheme (uri);
-  if (uri_scheme && uri_scheme[0] != '\0')
-    app_info = g_app_info_get_default_for_uri_scheme (uri_scheme);
-  g_free (uri_scheme);
-
-  if (!app_info)
+#ifdef G_OS_UNIX
+  /* We must always use the portal from within a sandbox since a helper
+     app may require different runtime permissions from the caller. Otherwise
+     g_app_info_launch_uris() can report success, but the helper app can
+     still fail during initialisation attempting to obtain resources that are
+     inaccessible from the caller's sandbox.*/
+  if (!glib_should_use_portal ())
+#endif
     {
-      GFile *file;
+      char *uri_scheme;
+      GAppInfo *app_info = NULL;
 
-      file = g_file_new_for_uri (uri);
-      app_info = g_file_query_default_handler (file, NULL, error);
-      g_object_unref (file);
-    }
+      /* g_file_query_default_handler() calls
+       * g_app_info_get_default_for_uri_scheme() too, but we have to do it
+       * here anyway in case GFile can't parse @uri correctly.
+       */
+      uri_scheme = g_uri_parse_scheme (uri);
+      if (uri_scheme && uri_scheme[0] != '\0')
+        app_info = g_app_info_get_default_for_uri_scheme (uri_scheme);
+      g_free (uri_scheme);
 
-  if (app_info)
-    {
-      GList l;
+      if (!app_info)
+        {
+          GFile *file;
 
-      l.data = (char *)uri;
-      l.next = l.prev = NULL;
-      res = g_app_info_launch_uris (app_info, &l, launch_context, error);
-      g_object_unref (app_info);
+          file = g_file_new_for_uri (uri);
+          app_info = g_file_query_default_handler (file, NULL, error);
+          g_object_unref (file);
+        }
+
+      if (app_info)
+        {
+          GList l;
+
+          l.data = (char *)uri;
+          l.next = l.prev = NULL;
+          res = g_app_info_launch_uris (app_info, &l, launch_context, error);
+          g_object_unref (app_info);
+        }
     }
 
 #ifdef G_OS_UNIX
