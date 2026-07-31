@@ -1441,6 +1441,8 @@ async_init_data_set_name_owner (GTask       *task,
       g_task_return_pointer (task, NULL, NULL);
       g_object_unref (task);
     }
+
+  g_object_notify (G_OBJECT (proxy), "g-name-owner");
 }
 
 static void
