@@ -341,10 +341,12 @@ local_sources = files(
 
 platform_deps = []
 internal_deps = []
+java_sources = []
 contenttype_sources = []
 portal_sources = []
 unix_sources = []
 win32_sources = []
+android_sources = []
 
 # This is also used by tests/gdbus-daemon, so use files() to include the path
 gdbus_daemon_sources = [
@@ -504,6 +506,29 @@ else
   install_headers(gio_win32_include_headers, subdir : 'gio-win32-2.0/gio')
 endif
 
+if have_java
+  platform_deps += java_dep
+  java_sources += [
+    'gjavafilestream.c'
+  ]
+
+  gio_java_include_headers = files(
+    'gjavafilestream.h'
+  )
+  install_headers(gio_java_include_headers, subdir : 'gio-java-2.0/gio')
+
+  if build_android_platform
+    android_sources += [
+      'gandroidcontentfile.c'
+    ]
+
+    gio_android_include_headers = files(
+      'gandroidcontentfile.h'
+    )
+    install_headers(gio_android_include_headers, subdir : 'gio-android-2.0/gio')
+  endif
+endif
+
 gio_base_sources = files(
   'gappinfo.c',
   'gasynchelper.c',
@@ -645,10 +670,12 @@ if glib_build_shared
   gio_sources += files ('../glib/gtrace.c')
 endif
 
+gio_sources += java_sources
 gio_sources += contenttype_sources
 gio_sources += gdbus_daemon_sources
 gio_sources += unix_sources
 gio_sources += win32_sources
+gio_sources += android_sources
 gio_sources += application_sources
 gio_sources += settings_sources
 gio_sources += gdbus_sources
@@ -986,6 +1013,30 @@ else
     description : 'unix specific headers for glib I/O library',
   )
   meson.override_dependency('gio-unix-2.0', libgio_dep)
+endif
+
+if have_java
+  pkg.generate(requires : ['gobject-2.0', 'gio-2.0'],
+    subdirs : ['gio-java-2.0'],
+    version : glib_version,
+    install_dir : glib_pkgconfigreldir,
+    filebase : 'gio-java-2.0',
+    name : 'GIO specific APIs that use java',
+    description : 'headers for glib I/O library needed for java support',
+  )
+  meson.override_dependency('gio-java-2.0', libgio_dep)
+
+  if build_android_platform
+    pkg.generate(requires : ['gobject-2.0', 'gio-2.0', 'gio-java-2.0'],
+      subdirs : ['gio-android-2.0'],
+      version : glib_version,
+      install_dir : glib_pkgconfigreldir,
+      filebase : 'gio-android-2.0',
+      name : 'GIO android specific APIs',
+      description : 'android specific headers for glib I/O library',
+    )
+    meson.override_dependency('gio-android-2.0', libgio_dep)
+  endif
 endif
 
 if host_system == 'windows'

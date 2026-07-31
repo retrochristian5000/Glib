@@ -355,6 +355,12 @@ glib_sources += files(
 
 platform_deps = []
 
+if have_java
+  glib_sources += files('glib-java.c')
+  glib_java_headers = files('glib-java.h')
+  install_headers(glib_java_headers, install_dir : glib_sub_includedir)
+endif
+
 if host_system == 'windows'
   if glib_build_shared
     glib_rc_conf = configuration_data({
@@ -387,6 +393,16 @@ else
     glib_sources += files('gspawn-unsupported.c')
   endif
   platform_deps = []
+endif
+
+if build_android_platform
+  glib_sources += files('glib-android.c')
+  glib_android_headers = files('glib-android.h')
+  platform_deps += [
+    cc.find_library('android'),
+    cc.find_library('log'),
+  ]
+  install_headers(glib_android_headers, install_dir : glib_includedir)
 endif
 
 if host_system == 'linux'
@@ -441,6 +457,7 @@ libglib = library('glib-2.0',
     pcre2,
     platform_deps,
     thread_dep,
+    have_java ? java_dep : [],
   ],
   c_args : glib_c_args,
   objc_args : glib_c_args,

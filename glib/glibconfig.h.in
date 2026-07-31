@@ -132,6 +132,8 @@ typedef unsigned @glib_intptr_type_define@ guintptr;
 
 #mesondefine G_HAVE_GROWING_STACK
 
+#mesondefine G_HAVE_JAVA_SUPPORT
+
 #ifndef _MSC_VER
 # define G_HAVE_GNUC_VARARGS 1
 #endif

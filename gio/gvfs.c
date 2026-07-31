@@ -349,8 +349,10 @@ static GVfs *vfs_default_singleton = NULL;  /* (owned) (atomic) */
 GVfs *
 g_vfs_get_default (void)
 {
+#ifndef G_PLATFORM_ANDROID
   if (GLIB_PRIVATE_CALL (g_check_setuid) ())
     return g_vfs_get_local ();
+#endif
 
   if (g_once_init_enter_pointer (&vfs_default_singleton))
     {

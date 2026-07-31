@@ -78,6 +78,9 @@
 #include "gwin32.h"
 #endif
 
+#ifdef G_PLATFORM_ANDROID
+#include "glib-androidprivate.h"
+#endif /* G_PLATFORM_ANDROID */
 
 #ifdef G_PLATFORM_WIN32
 #  include <windows.h>
@@ -1225,6 +1228,16 @@ g_get_application_name (void)
   if (retval)
     return retval;
 
+#ifdef G_PLATFORM_ANDROID
+  if (g_android_get_context())
+    {
+      char *app_label = g_android_get_package_label();
+      retval = g_intern_string(app_label);
+      g_free(app_label);
+      return retval;
+    }
+#endif
+
   return g_get_prgname ();
 }
 
@@ -1884,6 +1897,14 @@ g_build_user_data_dir (void)
   else
     data_dir = get_special_folder (&FOLDERID_LocalAppData);
 #endif
+#ifdef G_PLATFORM_ANDROID
+  else if (g_android_get_context())
+    {
+      gchar *user_app_dir = g_android_get_external_files_dir ();
+      data_dir = g_build_filename (user_app_dir, "share", NULL);
+      g_free (user_app_dir);
+    }
+#endif /* G_PLATFORM_ANDROID */
   if (!data_dir || !data_dir[0])
     {
       gchar *home_dir = g_build_home_dir ();
@@ -1949,6 +1970,15 @@ g_build_user_config_dir (void)
   else
     config_dir = get_special_folder (&FOLDERID_LocalAppData);
 #endif
+#ifdef G_PLATFORM_ANDROID
+  else if (g_android_get_context())
+    {
+      gchar *user_app_dir = g_android_get_external_files_dir ();
+      config_dir = g_build_filename (user_app_dir, "etc", NULL);
+      g_free (user_app_dir);
+    }
+#endif /* G_PLATFORM_ANDROID */
+
   if (!config_dir || !config_dir[0])
     {
       gchar *home_dir = g_build_home_dir ();
@@ -2020,6 +2050,10 @@ g_build_user_cache_dir (void)
   else
     cache_dir = get_special_folder (&FOLDERID_InternetCache);
 #endif
+#ifdef G_PLATFORM_ANDROID
+  else if (g_android_get_context())
+    cache_dir = g_android_get_cache_dir ();
+#endif /* G_PLATFORM_ANDROID */
   if (!cache_dir || !cache_dir[0])
     {
       gchar *home_dir = g_build_home_dir ();
@@ -2083,6 +2117,15 @@ g_build_user_state_dir (void)
   else
     state_dir = get_special_folder (&FOLDERID_LocalAppData);
 #endif
+#ifdef G_PLATFORM_ANDROID
+  else if (g_android_get_context())
+    {
+      gchar *user_app_dir = g_android_get_external_files_dir ();
+      state_dir = g_build_filename (user_app_dir, "var", "lib", NULL);
+      g_free (user_app_dir);
+    }
+#endif /* G_PLATFORM_ANDROID */
+
   if (!state_dir || !state_dir[0])
     {
       gchar *home_dir = g_build_home_dir ();
@@ -2599,6 +2642,19 @@ g_build_system_data_dirs (void)
   gchar **data_dir_vector = NULL;
   gchar *data_dirs = (gchar *) g_getenv ("XDG_DATA_DIRS");
 
+#ifdef G_PLATFORM_ANDROID
+  if (g_android_get_context() && (!data_dirs || !data_dirs[0]))
+    {
+      gchar *app_dir = g_android_get_files_dir ();
+      gchar *app_dir_data = g_build_filename (app_dir, "share", NULL);
+      gchar *dirv[] = { app_dir_data, NULL };
+      data_dir_vector =  g_strdupv (dirv);
+      g_free (app_dir);
+      g_free (app_dir_data);
+      return g_steal_pointer (&data_dir_vector);
+    }
+#endif
+
   /* These checks are the same as the ones that g_win32_get_system_data_dirs_for_module()
    * does. Please keep them in sync.
    */
@@ -2682,6 +2738,18 @@ g_build_system_config_dirs (void)
 {
   gchar **conf_dir_vector = NULL;
   const gchar *conf_dirs = g_getenv ("XDG_CONFIG_DIRS");
+#ifdef G_PLATFORM_ANDROID
+  if (g_android_get_context() && (!conf_dirs || !conf_dirs[0]))
+    {
+      gchar *app_dir = g_android_get_files_dir ();
+      gchar *app_dir_config = g_build_filename (app_dir, "etc", NULL);
+      gchar *dirv[] = { app_dir_config, NULL };
+      conf_dir_vector =  g_strdupv (dirv);
+      g_free (app_dir);
+      g_free (app_dir_config);
+      return g_steal_pointer (&conf_dir_vector);
+    }
+#endif
 #ifdef G_OS_WIN32
   if (conf_dirs)
     {

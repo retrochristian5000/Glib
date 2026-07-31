@@ -344,6 +344,19 @@ if glib_build_static_only
   glibconfig_conf.set('GI_STATIC_COMPILATION', '1')
 endif
 
+have_java = false
+# TODO: this workaround should probably be moved to meson
+if host_system == 'android'
+  have_java = cc.has_header('jni.h', required: get_option('java'))
+  java_dep = declare_dependency()
+elif add_languages('java', required: get_option('java'), native: false)
+  java_dep = dependency('jni', required: get_option('java'))
+  have_java = java_dep.found()
+endif
+glibconfig_conf.set('G_HAVE_JAVA_SUPPORT', have_java)
+
+build_android_platform = false
+
 # Cygwin glib port maintainers made it clear
 # (via the patches they apply) that they want no
 # part of glib W32 code, therefore we do not define
@@ -356,6 +369,10 @@ if host_system == 'windows'
 elif host_system == 'cygwin'
   glib_os = '''#define G_OS_UNIX
 #define G_WITH_CYGWIN'''
+elif host_system == 'android' and have_java
+  glib_os = '''#define G_OS_UNIX
+#define G_PLATFORM_ANDROID'''
+  build_android_platform = true
 else
   glib_os = '#define G_OS_UNIX'
 endif
@@ -2828,6 +2845,12 @@ if enable_systemtap
   summary('tapset dir', get_option('tapset_install_dir'), section: 'Directories')
 endif
 
+if host_system == 'android'
+  summary({
+    'android_platform' : build_android_platform,
+  }, section: 'Target configuration')
+endif
+
 if host_system == 'linux'
   summary({
     'selinux' : selinux_dep.found(),
@@ -2837,6 +2860,7 @@ endif
 
 summary({
   'xattr' : xattr_dep.length() > 0,
+  'java' : have_java,
   'man-pages' : get_option('man-pages'),
   'dtrace' : enable_dtrace,
   'systemtap' : enable_systemtap,

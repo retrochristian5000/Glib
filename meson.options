@@ -37,6 +37,11 @@ option('libmount',
        value : 'auto',
        description : 'build with libmount support')
 
+option('java',
+       type : 'feature',
+       value : 'auto',
+       description : 'build glib with java support')
+
 option('man',
        type : 'boolean',
        value : false,

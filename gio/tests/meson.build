@@ -686,6 +686,20 @@ if cc.get_id() != 'msvc'
   }
 endif
 
+if have_java
+  java_jvm_dep = dependency('jni', modules: ['jvm'], required: false)
+  if java_jvm_dep.found()
+    # this is really ugly, but meson neither sets the rpath nor provides it access to the location of libjvm.so
+    java_home = run_command('sh', '-c', '[ ! -z $JAVA_HOME ] && echo $JAVA_HOME', check: true, capture: true).stdout().strip()
+    gio_tests += {
+      'java-streams' : {
+        'dependencies' : [java_jvm_dep],
+        'env': { 'LD_PRELOAD' : java_home / 'lib/server/libjvm.so' },
+      }
+    }
+  endif
+endif
+
 test_extra_programs += {
   'gio-du' : {'install' : false},
   'echo-server' : {'install' : false},

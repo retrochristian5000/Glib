@@ -87,6 +87,10 @@
 #include "gwin32.h"
 #endif
 
+#ifdef G_PLATFORM_ANDROID
+#include "glib-androidprivate.h"
+#endif
+
 /**
  * G_LOG_DOMAIN:
  *
@@ -382,15 +386,28 @@ static void g_default_printerr_func (const gchar *string);
 /* --- variables --- */
 static GMutex         g_messages_lock;
 static GLogDomain    *g_log_domains = NULL;
+#ifdef G_PLATFORM_ANDROID
+static GPrintFunc     glib_print_func = g_android_print_handler;
+static GPrintFunc     glib_printerr_func = g_android_printerr_handler;
+#else
 static GPrintFunc     glib_print_func = g_default_print_func;
 static GPrintFunc     glib_printerr_func = g_default_printerr_func;
+#endif
 static GPrivate       g_log_depth;
 static GPrivate       g_log_structured_depth;
+#ifdef G_PLATFORM_ANDROID
+static GLogFunc       default_log_func = g_android_log_handler;
+#else
 static GLogFunc       default_log_func = g_log_default_handler;
+#endif
 static gpointer       default_log_data = NULL;
 static GTestLogFatalFunc fatal_log_func = NULL;
 static gpointer          fatal_log_data;
+#ifdef G_PLATFORM_ANDROID
+static GLogWriterFunc log_writer_func = g_android_structured_log_handler;
+#else
 static GLogWriterFunc log_writer_func = g_log_writer_default;
+#endif
 static gpointer       log_writer_user_data = NULL;
 static GDestroyNotify log_writer_user_data_free = NULL;
 static gboolean       g_log_debug_enabled = FALSE;  /* (atomic) */

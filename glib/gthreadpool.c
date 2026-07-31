@@ -37,6 +37,10 @@
 #include "gtimer.h"
 #include "gutils.h"
 
+#ifdef G_HAVE_JAVA_SUPPORT
+#include "glib-java.h"
+#endif // G_HAVE_JAVA_SUPPORT
+
 #define DEBUG_MSG(x)
 /* #define DEBUG_MSG(args) g_printerr args ; g_printerr ("\n");    */
 
@@ -316,6 +320,12 @@ g_thread_pool_thread_proxy (gpointer data)
 
   DEBUG_MSG (("thread %p started for pool %p.", g_thread_self (), pool));
 
+#ifdef G_HAVE_JAVA_SUPPORT
+  GJavaThreadSentinel *sentinel = NULL;
+  if (glib_java_is_initialized ())
+    sentinel = g_java_enter_thread ();
+#endif // G_HAVE_JAVA_SUPPORT
+
   g_async_queue_lock (pool->queue);
 
   while (TRUE)
@@ -408,6 +418,11 @@ g_thread_pool_thread_proxy (gpointer data)
            */
         }
     }
+
+#ifdef G_HAVE_JAVA_SUPPORT
+  if (sentinel)
+    g_java_leave_thread (sentinel);
+#endif // G_HAVE_JAVA_SUPPORT
 
   return NULL;
 }
