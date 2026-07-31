@@ -2297,6 +2297,7 @@ static void     type_name##_class_init        (TypeName##Class *klass); \
 static GType    type_name##_get_type_once     (void); \
 static gpointer type_name##_parent_class = NULL; \
 static gint     TypeName##_private_offset; \
+static GType    TypeName##_type_id; \
 \
 _G_DEFINE_TYPE_EXTENDED_CLASS_INIT(TypeName, type_name) \
 \
@@ -2318,6 +2319,7 @@ type_name##_get_type (void) \
   if (_g_type_once_init_enter (&static_g_define_type_id)) \
     { \
       GType g_define_type_id = type_name##_get_type_once (); \
+      TypeName##_type_id = g_define_type_id; \
       _g_type_once_init_leave (&static_g_define_type_id, g_define_type_id); \
     }					\
   return static_g_define_type_id; \
@@ -2354,6 +2356,7 @@ type_name##_get_type_once (void) \
 #define _G_DEFINE_INTERFACE_EXTENDED_BEGIN(TypeName, type_name, TYPE_PREREQ) \
 \
 static void     type_name##_default_init        (TypeName##Interface *klass); \
+static GType TypeName##_type_id; \
 \
 GType \
 type_name##_get_type (void) \
@@ -2369,6 +2372,7 @@ type_name##_get_type (void) \
                                        0, \
                                        (GInstanceInitFunc)NULL, \
                                        (GTypeFlags) 0); \
+      TypeName##_type_id = g_define_type_id; \
       if (TYPE_PREREQ != G_TYPE_INVALID) \
         g_type_interface_add_prerequisite (g_define_type_id, TYPE_PREREQ); \
       { /* custom code follows */
