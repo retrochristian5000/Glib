@@ -148,7 +148,7 @@ basic (void)
 
   loop = g_main_loop_new (NULL, FALSE);
 
-  server = g_notification_server_new ();
+  server = g_notification_server_new ("gtk", 1);
   g_signal_connect (server, "notification-received", G_CALLBACK (notification_received), &received_count);
   g_signal_connect (server, "notification-removed", G_CALLBACK (notification_removed), &removed_count);
   g_signal_connect (server, "notify::is-running", G_CALLBACK (server_notify_is_running), loop);
@@ -169,9 +169,12 @@ struct _GNotification
 
   gchar *title;
   gchar *body;
+  gchar *markup_body;
   GIcon *icon;
+  GNotificationSound *sound;
   GNotificationPriority priority;
   gchar *category;
+  GNotificationDisplayHintFlags display_hint;
   GPtrArray *buttons;
   gchar *default_action;
   GVariant *default_action_target;
@@ -180,36 +183,71 @@ struct _GNotification
 typedef struct
 {
   gchar *label;
+  gchar *purpose;
   gchar *action_name;
   GVariant *target;
 } Button;
+
+typedef enum
+{
+  SOUND_TYPE_DEFAULT,
+  SOUND_TYPE_FILE,
+  SOUND_TYPE_BYTES,
+  SOUND_TYPE_CUSTOM,
+} SoundType;
+
+struct _GNotificationSound
+{
+  GObject parent;
+
+  SoundType sound_type;
+  union {
+    GFile *file;
+    GBytes *bytes;
+    struct {
+      gchar *action;
+      GVariant *target;
+    } custom;
+  };
+};
 
 static void
 test_properties (void)
 {
   GNotification *n;
+  GNotificationSound *sound;
   struct _GNotification *rn;
+  struct _GNotificationSound *rns;
   GIcon *icon;
   const gchar * const *names;
   Button *b;
+  GVariant *target;
 
   n = g_notification_new ("Test");
 
   g_notification_set_title (n, "title");
   g_notification_set_body (n, "body");
+  g_notification_set_body_with_markup (n, "markup-body");
   g_notification_set_category (n, "cate.gory");
   icon = g_themed_icon_new ("i-c-o-n");
   g_notification_set_icon (n, icon);
   g_object_unref (icon);
   g_notification_set_priority (n, G_NOTIFICATION_PRIORITY_HIGH);
   g_notification_set_category (n, "cate.gory");
+  g_notification_set_display_hint_flags (n, G_NOTIFICATION_DISPLAY_HINT_TRANSIENT);
   g_notification_add_button (n, "label1", "app.action1::target1");
+  g_notification_add_button_with_purpose_and_target_value (n,
+                                                           "label",
+                                                           "x-gnome.purpose",
+                                                           "app.action2",
+                                                           g_variant_new_string("bla"));
   g_notification_set_default_action (n, "app.action2::target2");
 
   rn = (struct _GNotification *)n;
 
   g_assert_cmpstr (rn->title, ==, "title");
   g_assert_cmpstr (rn->body, ==, "body");
+  g_assert_cmpstr (rn->markup_body, ==, "markup-body");
   g_assert_true (G_IS_THEMED_ICON (rn->icon));
   names = g_themed_icon_get_names (G_THEMED_ICON (rn->icon));
   g_assert_cmpstr (names[0], ==, "i-c-o-n");
@@ -217,15 +255,59 @@ test_properties (void)
   g_assert_null (names[2]);
   g_assert_cmpint (rn->priority, ==, G_NOTIFICATION_PRIORITY_HIGH);
   g_assert_cmpstr (rn->category, ==, "cate.gory");
+  g_assert_true (rn->display_hint == G_NOTIFICATION_DISPLAY_HINT_TRANSIENT);
 
-  g_assert_cmpint (rn->buttons->len, ==, 1);
+  g_assert_cmpint (rn->buttons->len, ==, 2);
   b = (Button*)rn->buttons->pdata[0];
   g_assert_cmpstr (b->label, ==, "label1");
   g_assert_cmpstr (b->action_name, ==, "app.action1");
   g_assert_cmpstr (g_variant_get_string (b->target, NULL), ==, "target1");
 
+  b = (Button*)rn->buttons->pdata[1];
+  g_assert_cmpstr (b->label, ==, "label");
+  g_assert_cmpstr (b->purpose, ==, "x-gnome.purpose");
+  g_assert_cmpstr (b->action_name, ==, "app.action2");
+  g_assert_cmpstr (g_variant_get_string (b->target, NULL), ==, "bla");
+
   g_assert_cmpstr (rn->default_action, ==, "app.action2");
   g_assert_cmpstr (g_variant_get_string (rn->default_action_target, NULL), ==, "target2");
+
+  GFile *file = g_file_new_for_uri ("file:///someuri");
+  sound = g_notification_sound_new_from_file (file);
+  g_notification_set_sound (n, sound);
+  rns = (struct _GNotificationSound *)n->sound;
+  g_assert_true (rns->sound_type == SOUND_TYPE_FILE);
+  g_assert_true (rns->file == file);
+  g_clear_object (&sound);
+  g_clear_object (&file);
+
+  GBytes *bytes = g_bytes_new_static (NULL, 0);
+  sound = g_notification_sound_new_from_bytes (bytes);
+  g_notification_set_sound (n, sound);
+  rns = (struct _GNotificationSound *)n->sound;
+  g_assert_true (rns->sound_type == SOUND_TYPE_BYTES);
+  g_assert_true (rns->bytes == bytes);
+  g_clear_object (&sound);
+  g_clear_pointer (&bytes, g_bytes_unref);
+
+  sound = g_notification_sound_new_default ();
+  g_notification_set_sound (n, sound);
+  rns = (struct _GNotificationSound *)n->sound;
+  g_assert_true (rns->sound_type == SOUND_TYPE_DEFAULT);
+  g_notification_set_sound (n, NULL);
+  g_assert_null (rn->sound);
+  g_clear_object (&sound);
+
+  target = g_variant_new_string ("some target");
+  sound = g_notification_sound_new_custom ("app.play-custom-sound", target);
+  g_notification_set_sound (n, sound);
+  rns = (struct _GNotificationSound *)n->sound;
+  g_assert_true (rns->sound_type == SOUND_TYPE_CUSTOM);
+  g_assert_cmpstr (rns->custom.action, ==, "app.play-custom-sound");
+  g_assert_true (rns->custom.target == target);
+  g_notification_set_sound (n, NULL);
+  g_assert_null (rn->sound);
+  g_clear_object (&sound);
 
   g_object_unref (n);
 }

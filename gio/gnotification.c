@@ -90,17 +90,23 @@ struct _GNotification
 
   gchar *title;
   gchar *body;
+  gchar *markup_body;
   GIcon *icon;
+  GNotificationSound *sound;
   GNotificationPriority priority;
   gchar *category;
+  GNotificationDisplayHintFlags display_hint;
   GPtrArray *buttons;
   gchar *default_action;
   GVariant *default_action_target;  /* (nullable) (owned), not floating */
+  gchar *response_action;
+  GVariant *response_action_target;  /* (nullable) (owned), not floating */
 };
 
 typedef struct
 {
   gchar *label;
+  gchar *purpose;
   gchar *action_name;
   GVariant *target;
 } Button;
@@ -112,10 +118,10 @@ button_free (gpointer data)
 {
   Button *button = data;
 
-  g_free (button->label);
-  g_free (button->action_name);
-  if (button->target)
-    g_variant_unref (button->target);
+  g_clear_pointer (&button->label, g_free);
+  g_clear_pointer (&button->action_name, g_free);
+  g_clear_pointer (&button->purpose, g_free);
+  g_clear_pointer (&button->target, g_variant_unref);
 
   g_slice_free (Button, button);
 }
@@ -126,6 +132,7 @@ g_notification_dispose (GObject *object)
   GNotification *notification = G_NOTIFICATION (object);
 
   g_clear_object (&notification->icon);
+  g_clear_object (&notification->sound);
 
   G_OBJECT_CLASS (g_notification_parent_class)->dispose (object);
 }
@@ -137,6 +144,7 @@ g_notification_finalize (GObject *object)
 
   g_free (notification->title);
   g_free (notification->body);
+  g_free (notification->markup_body);
   g_free (notification->category);
   g_free (notification->default_action);
   if (notification->default_action_target)
@@ -160,6 +168,26 @@ g_notification_init (GNotification *notification)
 {
   notification->buttons = g_ptr_array_new_full (2, button_free);
 }
+
+static void
+markup_parser_text (GMarkupParseContext  *context,
+                    const gchar          *text,
+                    gsize                 text_len,
+                    gpointer              user_data,
+                    GError              **error)
+{
+  GString *composed = user_data;
+
+  g_string_append_len (composed, text, text_len);
+}
+
+static const GMarkupParser markup_parser = {
+  NULL,
+  NULL,
+  markup_parser_text,
+  NULL,
+  NULL,
+};
 
 /**
  * g_notification_new:
@@ -243,15 +271,45 @@ g_notification_get_body (GNotification *notification)
 {
   g_return_val_if_fail (G_IS_NOTIFICATION (notification), NULL);
 
+  if (notification->body == NULL && notification->markup_body != NULL)
+    {
+      GMarkupParseContext *context = NULL;
+      GString *composed = NULL;
+      GError *error = NULL;
+
+      composed = g_string_sized_new (strlen (notification->markup_body));
+      context = g_markup_parse_context_new (&markup_parser, 0, composed, NULL);
+
+      /* The markup parser expects the markup to start with an element, therefore add one */
+      if (g_markup_parse_context_parse (context, "<markup>", -1, &error) &&
+          g_markup_parse_context_parse (context, notification->markup_body, -1, &error) &&
+          g_markup_parse_context_parse (context, "</markup>", -1, &error) &&
+          g_markup_parse_context_end_parse (context, &error))
+        {
+          return g_string_free_and_steal (composed);
+        }
+      else
+        {
+          g_warning ("Failed to parse markup body: %s", error->message);
+          g_clear_pointer (&error, g_error_free);
+        }
+    }
+
   return notification->body;
 }
 
 /**
  * g_notification_set_body:
- * @notification: a #GNotification
+ * @notification: a [class@Gio.Notification]
  * @body: (nullable): the new body for @notification, or %NULL
  *
  * Sets the body of @notification to @body.
+ *
+ * If a body was set via [method@Gio.Notification.set_body_with_markup] then @body is
+ * only used for platforms that don't support markup.
+ *
+ * There is no need to set @body as a fallback when using
+ * [method@Gio.Notification.set_body_with_markup] since markup will be stripped as fallback.
  *
  * Since: 2.40
  */
@@ -260,11 +318,57 @@ g_notification_set_body (GNotification *notification,
                          const gchar   *body)
 {
   g_return_if_fail (G_IS_NOTIFICATION (notification));
-  g_return_if_fail (body != NULL);
+  g_return_if_fail (body == NULL || *body != '\0');
 
   g_free (notification->body);
 
   notification->body = g_strdup (body);
+}
+
+/*< private >
+ * g_notification_get_body_with_markup:
+ * @notification: a [class@Gio.Notification]
+ *
+ * Gets the current markup body of @notification.
+ *
+ * Returns: (nullable): the markup body of @notification
+ *
+ * Since: 2.85
+ */
+const gchar *
+g_notification_get_body_with_markup (GNotification *notification)
+{
+  g_return_val_if_fail (G_IS_NOTIFICATION (notification), NULL);
+
+  return notification->markup_body;
+}
+
+/**
+ * g_notification_set_body_with_markup:
+ * @notification: a [class@Gio.Notification]
+ * @markup_body: (nullable): the new body using markup for @notification, or %NULL
+ *
+ * If markup is supported by the platform @markup_body will be used as
+ * body for @notification, else the body set via [method@Gio.Notification.set_body]
+ * is used. If no body is set via [method@Gio.Notification.set_body] @markup_body
+ * is used as fallback by stripping the markup.
+ *
+ * This currently supports the following markup:
+ *
+ * - `<b>...</b>` for bold text
+ * - `<i>...</i>` for italic text
+ * - `<a href="...">...</a>` for links
+ *
+ * Since: 2.85
+ */
+void
+g_notification_set_body_with_markup (GNotification *notification,
+                                     const gchar   *markup_body)
+{
+  g_return_if_fail (G_IS_NOTIFICATION (notification));
+  g_return_if_fail (markup_body == NULL || *markup_body != '\0');
+
+  g_set_str (&notification->markup_body, markup_body);
 }
 
 /*< private >
@@ -304,6 +408,45 @@ g_notification_set_icon (GNotification *notification,
     g_object_unref (notification->icon);
 
   notification->icon = g_object_ref (icon);
+}
+
+/**
+ * g_notification_set_sound:
+ * @notification: a [class@Gio.Notification]
+ * @sound: (nullable): a [class@Gio.NotificationSound]
+ *
+ * Sets the sound that will be played when @notification is shown.
+ * If %NULL no sound will be played if the platform supports it.
+ *
+ * Since: 2.85
+ */
+void
+g_notification_set_sound (GNotification      *notification,
+                          GNotificationSound *sound)
+{
+
+  g_return_if_fail (G_IS_NOTIFICATION (notification));
+  g_return_if_fail (G_IS_NOTIFICATION_SOUND (sound) || sound == NULL);
+
+  g_set_object (&notification->sound, sound);
+}
+
+/*< private >
+ * g_notification_get_sound:
+ * @notification: a [class@Gio.Notification]
+ *
+ * Gets the sound currently set on @notification.
+ *
+ * Returns: (nullable): (transfer none): the sound associated with @notification
+ *
+ * Since: 2.85
+ */
+GNotificationSound *
+g_notification_get_sound (GNotification *notification)
+{
+  g_return_val_if_fail (G_IS_NOTIFICATION (notification), NULL);
+
+  return notification->sound;
 }
 
 /*< private >
@@ -369,12 +512,25 @@ g_notification_get_category (GNotification *notification)
  * @notification: a #GNotification
  * @category: (nullable): the category for @notification, or %NULL for no category
  *
- * Sets the type of @notification to @category. Categories have a main
- * type like `email`, `im` or `device` and can have a detail separated
- * by a `.`, e.g. `im.received` or `email.arrived`. Setting the category
- * helps the notification server to select proper feedback to the user.
+ * The notification server may use @category to present the @notification
+ * specially.
  *
- * Standard categories are [listed in the specification](https://specifications.freedesktop.org/notification-spec/latest/ar01s06.html).
+ * Standardized categories are:
+ *
+ * - [const@Gio.NOTIFICATION_CATEGORY_IM_RECEIVED]
+ * - [const@Gio.NOTIFICATION_CATEGORY_ALARM_RINGING]
+ * - [const@Gio.NOTIFICATION_CATEGORY_CALL_INCOMING]
+ * - [const@Gio.NOTIFICATION_CATEGORY_CALL_OUTGOING]
+ * - [const@Gio.NOTIFICATION_CATEGORY_CALL_UNANSWERED]
+ * - [const@Gio.NOTIFICATION_CATEGORY_WEATHER_WARNING_EXTREME]
+ * - [const@Gio.NOTIFICATION_CATEGORY_CELLBROADCAST_DANGER_SEVERE]
+ * - [const@Gio.NOTIFICATION_CATEGORY_CELLBROADCAST_AMBER_ALERT]
+ * - [const@Gio.NOTIFICATION_CATEGORY_CELLBROADCAST_TEST]
+ * - [const@Gio.NOTIFICATION_CATEGORY_OS_BATTERY_LOW]
+ * - [const@Gio.NOTIFICATION_CATEGORY_BROWSER_WEB_NOTIFICATION]
+ *
+ * It's possible to specify custom categories but they should use `x-vendor.`
+ * as prefix, where vendor is the platform implementing the category.
  *
  * Since: 2.70
  */
@@ -388,6 +544,38 @@ g_notification_set_category (GNotification *notification,
   g_free (notification->category);
 
   notification->category = g_strdup (category);
+}
+
+/*< private >
+ * g_notification_get_display_hint_flags:
+ * @notification: a [class@Gio.Notification]
+ *
+ * Returns: the display hint flags of @notification
+ *
+ * Since: 2.85
+ */
+GNotificationDisplayHintFlags
+g_notification_get_display_hint_flags (GNotification *notification)
+{
+  g_return_val_if_fail (G_IS_NOTIFICATION (notification), G_NOTIFICATION_DISPLAY_HINT_NONE);
+
+  return notification->display_hint;
+}
+
+/**
+ * g_notification_set_display_hint_flags:
+ * @notification: a [class@Gio.Notification]
+ * @flags: the display hint flags for @notification
+ *
+ * Since: 2.85
+ */
+void
+g_notification_set_display_hint_flags (GNotification                 *notification,
+                                       GNotificationDisplayHintFlags  flags)
+{
+  g_return_if_fail (G_IS_NOTIFICATION (notification));
+
+  notification->display_hint = flags;
 }
 
 /**
@@ -442,7 +630,7 @@ g_notification_add_button (GNotification *notification,
       return;
     }
 
-  g_notification_add_button_with_target_value (notification, label, action, target);
+  g_notification_add_button_with_purpose_and_target_value (notification, label, NULL, action, target);
 
   g_free (action);
   if (target)
@@ -484,7 +672,7 @@ g_notification_add_button_with_target (GNotification *notification,
       va_end (args);
     }
 
-  g_notification_add_button_with_target_value (notification, label, action, target);
+  g_notification_add_button_with_purpose_and_target_value (notification, label, NULL, action, target);
 }
 
 /**
@@ -508,10 +696,47 @@ g_notification_add_button_with_target_value (GNotification *notification,
                                              const gchar   *action,
                                              GVariant      *target)
 {
+  g_notification_add_button_with_purpose_and_target_value (notification, label, NULL, action, target);
+}
+
+/**
+ * g_notification_add_button_with_purpose_and_target_value: (rename-to g_notification_add_button_with_purpose_and_target)
+ * @notification: a [class@Gio.Notification]
+ * @label: (nullable): label of the button
+ * @purpose: (nullable): purpose of the button
+ * @action: an action name
+ * @target: (nullable): a [type@GLib.Variant] to use as @action's parameter, or %NULL
+ *
+ * Adds a button to @notification that activates @action when clicked.
+ * @action must be an application-wide action (it must start with `app.`).
+ *
+ * If @target is non-%NULL, @action will be activated with @target as
+ * its parameter.
+ *
+ * Standardized purposes are:
+ *
+ * - [const@Gio.NOTIFICATION_BUTTON_PURPOSE_CALL_ACCEPT]
+ * - [const@Gio.NOTIFICATION_BUTTON_PURPOSE_CALL_DECLINE]
+ * - [const@Gio.NOTIFICATION_BUTTON_PURPOSE_CALL_HANG_UP]
+ * - [const@Gio.NOTIFICATION_BUTTON_PURPOSE_CALL_ENABLE_SPEAKERPHONE]
+ * - [const@Gio.NOTIFICATION_BUTTON_PURPOSE_CALL_DISABLE_SPEAKERPHONE]
+ *
+ * It's possible to specify custom purposes but they should use `x-vendor.`
+ * as prefix, where vendor is the platform implementing the purpose.
+ *
+ * Since: 2.85
+ */
+void
+g_notification_add_button_with_purpose_and_target_value (GNotification *notification,
+                                                         const gchar   *label,
+                                                         const gchar   *purpose,
+                                                         const gchar   *action,
+                                                         GVariant      *target)
+{
   Button *button;
 
   g_return_if_fail (G_IS_NOTIFICATION (notification));
-  g_return_if_fail (label != NULL);
+  g_return_if_fail (label != NULL || purpose != NULL);
   g_return_if_fail (action != NULL && g_action_name_is_valid (action));
 
   if (!g_str_has_prefix (action, "app."))
@@ -521,7 +746,12 @@ g_notification_add_button_with_target_value (GNotification *notification,
     }
 
   button =  g_slice_new0 (Button);
-  button->label = g_strdup (label);
+  if (label)
+    button->label = g_strdup (label);
+
+  if (purpose)
+    button->purpose = g_strdup (purpose);
+
   button->action_name = g_strdup (action);
 
   if (target)
@@ -547,6 +777,7 @@ g_notification_get_n_buttons (GNotification *notification)
  * @notification: a #GNotification
  * @index: index of the button
  * @label: (): return location for the button's label
+ * @purpose: (): return location for the button's purpose
  * @action: (): return location for the button's associated action
  * @target: (): return location for the target @action should be
  * activated with
@@ -561,6 +792,7 @@ void
 g_notification_get_button (GNotification  *notification,
                            gint            index,
                            gchar         **label,
+                           gchar         **purpose,
                            gchar         **action,
                            GVariant      **target)
 {
@@ -570,6 +802,9 @@ g_notification_get_button (GNotification  *notification,
 
   if (label)
     *label = g_strdup (button->label);
+
+  if (purpose)
+    *purpose = g_strdup (button->purpose);
 
   if (action)
     *action = g_strdup (button->action_name);
@@ -763,6 +998,82 @@ g_notification_set_default_action_and_target_value (GNotification *notification,
 
   if (target)
     notification->default_action_target = g_variant_ref_sink (target);
+}
+
+/*< private >
+ * g_notification_get_response_action_for_text:
+ * @notification: a #GNotification
+ * @action: (out) (optional) (nullable) (transfer full): return location for the
+ *   response action, or %NULL if unset
+ * @target: (out) (optional) (nullable) (transfer full): return location for the
+ *   target of the response action, or %NULL if unset
+ *
+ * Gets the action and target for the response for text action of @notification.
+ *
+ * If this function returns %TRUE, @action is guaranteed to be set to a non-%NULL
+ * value (if a pointer is passed to @action). @target may still return a %NULL
+ * value, as the response action may have no target.
+ *
+ * Returns: %TRUE if @notification has a response action
+ */
+gboolean
+g_notification_get_response_action_for_text (GNotification  *notification,
+                                             gchar         **action,
+                                             GVariant      **target)
+{
+  if (notification->response_action == NULL)
+    return FALSE;
+
+  if (action)
+    *action = g_strdup (notification->response_action);
+
+  if (target)
+    {
+      if (notification->response_action_target)
+        *target = g_variant_ref (notification->response_action_target);
+      else
+        *target = NULL;
+    }
+
+  return TRUE;
+}
+/**
+ * g_notification_set_response_action_with_text:
+ * @notification: a [class@Gio.Notification]
+ * @action: an action name
+ * @target: (nullable): a [type@GLib.Variant] to use as @action's parameter, or %NULL
+ *
+ * If @action is set and supported by the platform the @notification will
+ * contain a text field that let's a user submit a text directly from it.
+ *
+ * @action must be an application-wide action (it must start with `app.`) and
+ * needs to use a tuple in form of `(vs)` as parameter, where the first item
+ * is the target and the second the response of the user.
+
+ * If @target is non-%NULL, @action will be activated with @target as
+ * its parameter.
+ *
+ * Since: 2.85
+ */
+void
+g_notification_set_response_action_for_text (GNotification *notification,
+                                             const gchar   *action,
+                                             GVariant      *target)
+{
+  g_return_if_fail (G_IS_NOTIFICATION (notification));
+  g_return_if_fail (action != NULL && g_action_name_is_valid (action));
+
+  if (!g_str_has_prefix (action, "app."))
+    {
+      g_warning ("%s: action '%s' does not start with 'app.'."
+                 "This is unlikely to work properly.", G_STRFUNC, action);
+    }
+
+  g_set_str (&notification->response_action, action);
+
+  g_clear_pointer (&notification->response_action_target, g_variant_unref);
+  if (target)
+    notification->response_action_target = g_variant_ref_sink (target);
 }
 
 static GVariant *
