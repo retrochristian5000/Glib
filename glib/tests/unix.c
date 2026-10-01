@@ -166,9 +166,10 @@ test_closefrom (void)
         {
           if (fcntl (fds[i], F_GETFD) != -1 || errno != EBADF)
             {
+              int failed_fd = fds[i];
               async_signal_safe_message ("fd should have been closed");
               g_free (fds);
-              _exit (100 + fds[i]);
+              _exit (100 + failed_fd);
             }
         }
 
