@@ -1652,6 +1652,8 @@ g_cclosure_marshal_generic (GClosure     *closure,
   atypes = g_alloca (sizeof (ffi_type *) * n_args);
   args =  g_alloca (sizeof (gpointer) * n_args);
 
+  enum_tmpval = NULL;
+  pointer_tmpval = NULL;
   if (tmpval_used)
     {
       enum_tmpval = g_alloca (sizeof (gint));
@@ -1681,12 +1683,6 @@ g_cclosure_marshal_generic (GClosure     *closure,
 
   for (i = 1; i < n_args - 1; i++)
     {
-      if (tmpval_used)
-        {
-          enum_tmpval = g_alloca (sizeof (gint));
-          pointer_tmpval = g_alloca (sizeof (gpointer));
-        }
-
       atypes[i] = value_to_ffi_type (param_values + i,
                                      &args[i],
                                      enum_tmpval,
